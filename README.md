@@ -19,6 +19,7 @@ Tamlinux packages and utilities must be fast, rock-solid, and free of bloat. Rat
 | **`tam_fs`** | `tam_fs_*` | Safe filesystem primitives, whole-file reading, and atomic writes via temporary file and rename (`tam_fs_write_atomic`). |
 | **`tam_ini`** | `tam_ini_*` | Lightweight INI and key-value file parser for user configuration and desktop state. |
 | **`tam_term`** | `tam_log_*` | Colorized terminal logging and terminal escape sequence utilities. |
+| **`tam_portal`** | `tam_portal_*` | Native desktop portal integration (FileChooser via D-Bus session bus). |
 
 ## Quickstart
 

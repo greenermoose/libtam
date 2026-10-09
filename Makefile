@@ -1,5 +1,7 @@
-CC ?= gcc
-CFLAGS ?= -O2 -Wall -Wextra -Wpedantic -fPIC -Iinclude
+DBUS_CFLAGS ?= $(shell pkg-config --cflags dbus-1)
+DBUS_LIBS ?= $(shell pkg-config --libs dbus-1)
+
+CFLAGS ?= -O2 -Wall -Wextra -Wpedantic -fPIC -Iinclude $(DBUS_CFLAGS)
 PREFIX ?= /usr/local
 
 SRCS = src/tam_version.c \
@@ -7,7 +9,8 @@ SRCS = src/tam_version.c \
        src/tam_str.c \
        src/tam_exec.c \
        src/tam_fs.c \
-       src/tam_ini.c
+       src/tam_ini.c \
+       src/tam_portal.c
 
 OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
 STATIC_LIB = build/libtam.a
@@ -28,10 +31,10 @@ $(STATIC_LIB): $(OBJS)
 	ar rcs $@ $^
 
 $(SHARED_LIB): $(OBJS)
-	$(CC) -shared -o $@ $^
+	$(CC) -shared -o $@ $^ $(DBUS_LIBS)
 
 $(TEST_BIN): tests/test_tam.c $(STATIC_LIB)
-	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_tam.c $(STATIC_LIB) -o $@
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_tam.c $(STATIC_LIB) -o $@ $(DBUS_LIBS)
 
 test: $(TEST_BIN)
 	./$(TEST_BIN)

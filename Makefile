@@ -17,7 +17,7 @@ STATIC_LIB = build/libtam.a
 SHARED_LIB = build/libtam.so
 TEST_BIN = build/test_tam
 
-.PHONY: all test clean install
+.PHONY: all test clean install uninstall
 
 all: $(STATIC_LIB) $(SHARED_LIB)
 
@@ -48,3 +48,8 @@ install: $(STATIC_LIB) $(SHARED_LIB)
 	install -d $(DESTDIR)$(PREFIX)/lib
 	install -m 644 $(STATIC_LIB) $(DESTDIR)$(PREFIX)/lib/
 	install -m 755 $(SHARED_LIB) $(DESTDIR)$(PREFIX)/lib/
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/include/tam.h
+	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.a
+	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so

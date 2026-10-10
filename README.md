@@ -34,6 +34,10 @@ make test
 
 # Install to system
 sudo make install PREFIX=/usr/local
+
+# Or install a development build for your user, and remove it again
+make install PREFIX=$HOME/.local/dev
+make uninstall PREFIX=$HOME/.local/dev
 ```
 
 ### Usage Example

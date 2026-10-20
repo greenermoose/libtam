@@ -40,6 +40,15 @@ make install PREFIX=$HOME/.local/dev
 make uninstall PREFIX=$HOME/.local/dev
 ```
 
+`make install` also writes a pkg-config file, `$(PREFIX)/lib/pkgconfig/libtam.pc`.
+Programs that use `libtam`, such as `tam` and `tamlinux-tools`, find it with
+`pkg-config libtam`. For a prefix outside pkg-config's default search path,
+add it once in your shell profile:
+
+```bash
+export PKG_CONFIG_PATH="$HOME/.local/dev/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+```
+
 ### Usage Example
 
 ```c

@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 bool tam_fs_file_exists(const char *path) {
     if (!path) return false;
@@ -74,4 +75,25 @@ bool tam_fs_write_atomic(const char *path, const void *data, size_t len, mode_t 
     }
 
     return true;
+}
+
+bool tam_fs_mkdir_p(const char *path, mode_t mode) {
+    if (!path || path[0] == '\0') return false;
+    size_t len = strlen(path);
+    char *tmp = malloc(len + 1);
+    if (!tmp) return false;
+    memcpy(tmp, path, len + 1);
+    bool ok = true;
+    for (char *p = tmp + 1; ok; p++) {
+        if (*p != '/' && *p != '\0') continue;
+        char saved = *p;
+        *p = '\0';
+        if (mkdir(tmp, mode) != 0 && errno != EEXIST) ok = false;
+        *p = saved;
+        if (saved == '\0') break;
+    }
+    struct stat st;
+    ok = ok && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+    free(tmp);
+    return ok;
 }

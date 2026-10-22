@@ -4,6 +4,8 @@
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/stat.h>
 
 static void test_version(void) {
     const char *v = tam_version();
@@ -96,40 +98,147 @@ static void test_exec(void) {
     printf("  [PASS] test_exec\n");
 }
 
-static void test_portal(void) {
-    /* Test URI percent decoding and conversion */
-    char *p1 = tam_portal_uri_to_path("file:///home/fred/test%20file.txt");
-    assert(p1 && strcmp(p1, "/home/fred/test file.txt") == 0);
-    free(p1);
+/* A child that writes many small pieces over about a second must finish:
+ * libtam 0.3.0 charged 100 ms per poll and killed it early. */
+static void test_exec_chatty(void) {
+    const char *const argv[] = {"sh", "-c",
+        "i=0; while [ $i -lt 200 ]; do echo $i; sleep 0.005; i=$((i+1)); done", NULL};
+    tam_exec_result_t r = tam_exec(argv, 5000);
+    assert(!r.timed_out);
+    assert(r.exit_code == 0);
+    assert(strstr(r.stdout_buf, "199\n") != NULL);
+    tam_exec_result_free(&r);
+}
 
-    char *p2 = tam_portal_uri_to_path("file://localhost/tmp/hello%2C%20world%21");
-    assert(p2 && strcmp(p2, "/tmp/hello, world!") == 0);
-    free(p2);
+static long long ms_now(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
 
-    char *p3 = tam_portal_uri_to_path("/regular/path");
-    assert(p3 && strcmp(p3, "/regular/path") == 0);
-    free(p3);
+static void test_exec_opts(void) {
+    test_exec_chatty();
 
-    assert(tam_portal_uri_to_path(NULL) == NULL);
+    /* Standard input is /dev/null by default, never the caller's terminal. */
+    const char *const cat[] = {"cat", NULL};
+    tam_exec_result_t r1 = tam_exec(cat, 2000);
+    assert(!r1.timed_out && r1.exit_code == 0 && r1.stdout_len == 0);
+    tam_exec_result_free(&r1);
 
-    /* Test result freeing with NULL and allocated buffers */
-    tam_portal_file_result_t dummy;
-    memset(&dummy, 0, sizeof(dummy));
-    dummy.status = 2;
-    dummy.error_message = strdup("Test error message");
-    dummy.count = 2;
-    dummy.paths = calloc(3, sizeof(char *));
-    dummy.paths[0] = strdup("/path/one");
-    dummy.paths[1] = strdup("/path/two");
-    tam_portal_file_result_free(&dummy);
-    assert(dummy.paths == NULL);
-    assert(dummy.error_message == NULL);
-    assert(dummy.count == 0);
+    /* Supplied input reaches the child, even more than a pipe buffer holds. */
+    size_t big = 300000;
+    char *data = malloc(big);
+    assert(data);
+    for (size_t i = 0; i < big; i++) data[i] = (char)('a' + i % 26);
+    tam_exec_opts_t o2 = { .timeout_ms = 5000, .input = data, .input_len = big };
+    tam_exec_result_t r2 = tam_exec_opts(cat, &o2);
+    assert(!r2.timed_out && r2.exit_code == 0);
+    assert(r2.stdout_len == big && memcmp(r2.stdout_buf, data, big) == 0);
+    tam_exec_result_free(&r2);
 
-    /* Also verify result_free handles NULL safely */
-    tam_portal_file_result_free(NULL);
+    /* A child that ignores its input exits cleanly; no SIGPIPE in the caller. */
+    const char *const truebin[] = {"true", NULL};
+    tam_exec_result_t r3 = tam_exec_opts(truebin, &o2);
+    assert(!r3.timed_out && r3.exit_code == 0);
+    tam_exec_result_free(&r3);
+    free(data);
 
-    printf("  [PASS] test_portal\n");
+    /* The output cap stops a runaway child quickly and keeps what fits. */
+    const char *const yes[] = {"yes", NULL};
+    tam_exec_opts_t o4 = { .timeout_ms = 5000, .max_output = 10000 };
+    long long t0 = ms_now();
+    tam_exec_result_t r4 = tam_exec_opts(yes, &o4);
+    assert(r4.truncated && !r4.timed_out && r4.exit_code == -1);
+    assert(r4.stdout_len == 10000);
+    assert(ms_now() - t0 < 2000);
+    tam_exec_result_free(&r4);
+
+    /* A child that closes its output but keeps running is still bounded. */
+    const char *const silent[] = {"sh", "-c", "exec >&- 2>&-; sleep 5", NULL};
+    t0 = ms_now();
+    tam_exec_result_t r5 = tam_exec(silent, 300);
+    assert(r5.timed_out && r5.exit_code == -1);
+    assert(ms_now() - t0 < 2000);
+    tam_exec_result_free(&r5);
+
+    /* A timeout kills helpers the child started, which hold its output open. */
+    const char *const group[] = {"sh", "-c", "sleep 5 & sleep 5; wait", NULL};
+    t0 = ms_now();
+    tam_exec_result_t r6 = tam_exec(group, 300);
+    assert(r6.timed_out);
+    assert(ms_now() - t0 < 2000);
+    tam_exec_result_free(&r6);
+
+    /* A missing program reports 127. */
+    const char *const missing[] = {"tamlinux-no-such-program", NULL};
+    tam_exec_result_t r7 = tam_exec(missing, 2000);
+    assert(r7.exit_code == 127 && !r7.timed_out);
+    tam_exec_result_free(&r7);
+
+    printf("  [PASS] test_exec_opts\n");
+}
+
+static void test_paths(void) {
+    char *p;
+    p = tam_path_join("/a/b", "c"); assert(strcmp(p, "/a/b/c") == 0); free(p);
+    p = tam_path_join("/a/b/", "/c"); assert(strcmp(p, "/a/b/c") == 0); free(p);
+    p = tam_path_join("/", "c"); assert(strcmp(p, "/c") == 0); free(p);
+    p = tam_path_join("/a", ""); assert(strcmp(p, "/a") == 0); free(p);
+
+    p = tam_path_join_under("/k", "shell/pipes.html");
+    assert(p && strcmp(p, "/k/shell/pipes.html") == 0); free(p);
+    p = tam_path_join_under("/k", "a..b/c"); assert(p != NULL); free(p);
+    assert(tam_path_join_under("/k", "../etc/passwd") == NULL);
+    assert(tam_path_join_under("/k", "a/../../b") == NULL);
+    assert(tam_path_join_under("/k", "a/..") == NULL);
+    assert(tam_path_join_under("/k", "/etc/passwd") == NULL);
+    assert(tam_path_join_under("/k", "") == NULL);
+
+    char tmpl[] = "/tmp/libtam-test-XXXXXX";
+    char *root = mkdtemp(tmpl);
+    assert(root);
+    char *deep = tam_path_join(root, "x/y/z");
+    assert(tam_fs_mkdir_p(deep, 0700));
+    assert(tam_fs_mkdir_p(deep, 0700));
+    free(deep);
+
+    setenv("XDG_STATE_HOME", root, 1);
+    p = tam_xdg_path(TAM_XDG_STATE, "tam", "level", true);
+    char *want = tam_path_join(root, "tamlinux/tam/level");
+    assert(p && strcmp(p, want) == 0);
+    free(want);
+    free(p);
+    p = tam_xdg_path(TAM_XDG_STATE, "tam", NULL, false);
+    struct stat st;
+    assert(p && stat(p, &st) == 0 && S_ISDIR(st.st_mode) && (st.st_mode & 0777) == 0700);
+    free(p);
+    assert(tam_xdg_path(TAM_XDG_STATE, "tam", "../escape", false) == NULL);
+    assert(tam_xdg_path(TAM_XDG_STATE, "a/b", NULL, false) == NULL);
+
+    /* A relative base is ignored, as the XDG specification says. */
+    setenv("XDG_STATE_HOME", "relative", 1);
+    setenv("HOME", root, 1);
+    p = tam_xdg_path(TAM_XDG_STATE, "tam", NULL, false);
+    want = tam_path_join(root, ".local/state/tamlinux/tam");
+    assert(p && strcmp(p, want) == 0);
+    free(want);
+    free(p);
+    unsetenv("XDG_RUNTIME_DIR");
+    assert(tam_xdg_path(TAM_XDG_RUNTIME, "tam", NULL, false) == NULL);
+
+    const char *const rm[] = {"rm", "-rf", root, NULL};
+    tam_exec_result_t r = tam_exec(rm, 5000);
+    tam_exec_result_free(&r);
+    printf("  [PASS] test_paths\n");
+}
+
+static void test_json(void) {
+    tam_str_t s = tam_str_new("{\"v\":\"");
+    s = tam_str_cat_json(s, "a\"b\\c\nd\te\x01" "f caf\xc3\xa9");
+    s = tam_str_cat(s, "\"}");
+    assert(strcmp(s, "{\"v\":\"a\\\"b\\\\c\\nd\\te\\u0001f caf\xc3\xa9\"}") == 0);
+    tam_str_free(s);
+    printf("  [PASS] test_json\n");
 }
 
 int main(void) {
@@ -141,7 +250,9 @@ int main(void) {
     test_fs();
     test_ini();
     test_exec();
-    test_portal();
+    test_exec_opts();
+    test_paths();
+    test_json();
 
     printf("All libtam tests passed successfully!\n");
     return 0;

@@ -1,4 +1,4 @@
-#include "tam.h"
+#include "tam_portal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

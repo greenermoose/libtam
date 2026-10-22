@@ -135,3 +135,26 @@ tam_str_t tam_str_trim(tam_str_t s, const char *cset) {
     hdr->len = len;
     return s;
 }
+
+tam_str_t tam_str_cat_json(tam_str_t s, const char *text) {
+    if (!s || !text) return s;
+    for (const unsigned char *p = (const unsigned char *)text; *p != '\0' && s; p++) {
+        switch (*p) {
+        case '"':  s = tam_str_cat(s, "\\\""); break;
+        case '\\': s = tam_str_cat(s, "\\\\"); break;
+        case '\b': s = tam_str_cat(s, "\\b"); break;
+        case '\f': s = tam_str_cat(s, "\\f"); break;
+        case '\n': s = tam_str_cat(s, "\\n"); break;
+        case '\r': s = tam_str_cat(s, "\\r"); break;
+        case '\t': s = tam_str_cat(s, "\\t"); break;
+        default:
+            if (*p < 0x20) {
+                s = tam_str_cat_printf(s, "\\u%04x", *p);
+            } else {
+                s = tam_str_cat_len(s, p, 1);
+            }
+            break;
+        }
+    }
+    return s;
+}

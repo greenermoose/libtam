@@ -1,6 +1,6 @@
 # Experimental Linux console display control
 
-`tam_display.h` / `libtam-display.a` API 0.2.0 provides DRM inspection,
+`tam_display.h` / `libtam-display.a` API 0.3.0 provides DRM inspection,
 connector routing analysis, owned restoration references and atomic
 transactions. `tam_vt.h` verifies the caller's foreground text VT.
 `tam_display_session.h` / `libtam-display-session.a` is a separate optional
@@ -107,7 +107,20 @@ any uncertain commit; a failed atomic test issues no display commit.
 
 `tam_display_state_restore` re-enumerates the same retained device, checks
 object/property/monitor identity and expected state, tests the owned restore
-request and commits it. Unexpected changes refuse stale replay. A successful
+request and commits it. Recovery permits captured connectors to disconnect or
+vanish, including EDID disappearance and narrow kernel detachment/disable
+transitions on the lost output's unused pipeline. It restores all surviving
+captured console outputs using their owned modes/framebuffers, detaches lost
+outputs and disables only CRTCs/planes without a surviving route. Vanished
+connector IDs are omitted from the request; shared CRTCs stay enabled.
+
+New connectors, changed nonzero EDID identities, unknown connection state,
+foreign routing and replacement CRTCs/planes still refuse stale replay. No
+new monitor modes are invented. If no captured working output survives,
+restoration fails without a modeset; the owner must release control and report
+loss. After TEST_ONLY, a second enumeration must match the tested observation,
+then authorization is checked immediately before the sole synchronous commit.
+Further hotplug cancels recovery rather than retrying indefinitely. A successful
 restore consumes the observation: capture afresh for another selection.
 `tam_display_state_free` releases references and its duplicate descriptor;
 it does not implicitly restore or claim successful recovery.
@@ -122,9 +135,11 @@ reported as failure. No signal handler or fixture test establishes the
 kernel's fallback if that process dies. Kernel ioctl hangs cannot be bounded
 by a userspace timer alone.
 
-Hotplug ends a trial, but safe replacement-output selection after retained
-output loss is not implemented: changed identities refuse replay. Multi-GPU
-compensation, per-output wake, persistent `keep --shell`, terminal UI parity,
+Hotplug ends a trial and the software-tested recovery restores surviving
+captured outputs, including after retained-output loss. Drivers that also
+replace CRTCs/planes, introduce connectors or alter unrelated routing still
+fail closed; physical recovery remains unproved. Multi-GPU compensation,
+per-output wake, persistent `keep --shell`, terminal UI parity,
 actual console framebuffer mapping, resource measurements and physical
 fbcon/VT/desktop handoff remain open. Do not install this prototype into a
 live session outside the recorded package Test route.
@@ -133,5 +148,8 @@ live session outside the recorded package Test route.
 ASan/UBSan. Fake ioctl tests cover reference ownership/cleanup, shared CRTCs
 and framebuffers, kernel test/write rejection, stale state, interrupted
 commits, missing authorization, failed restore, limits and query failures.
+Unplug fixtures cover all three retained choices and every disconnected/removed
+connector subset, shared-pipeline preservation, no remaining output, changed
+identity, topology races and authorization loss between test and write.
 Fake VT/session tests verify foreground rejection, existing-permission acquisition,
 seat mismatches, existing master, session loss and cleanup. They contact no display or real bus.

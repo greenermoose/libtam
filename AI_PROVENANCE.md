@@ -13,3 +13,8 @@ not reconstruct authorship for earlier commits. Transcripts remain private.
 | 2026-10-25 | Optional DRM inspection/routing analysis; core/display build separation | [Session](docs/ai/2026-10-25-monitor-feasibility.md) |
 
 | 2026-10-25 | Foreground VT/seat access, owned restoration and guarded atomic transactions | [Session](docs/ai/2026-10-25-monitor-ownership.md) |
+
+2026-10-25: Codex CLI `0.164.0` (`gpt-6.1-sol`) implements validated recovery
+of surviving captured console outputs after retained-output disconnect/removal.
+Physical recovery and deployment remain separate gates.
+[Session](docs/ai/2026-10-25-monitor-unplug.md).

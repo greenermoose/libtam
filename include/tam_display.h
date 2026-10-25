@@ -11,7 +11,7 @@ extern "C" {
 
 /* Experimental display API, independent of core and portal archives.
  * Inspection IDs are transient. Only an owned state can restore displays. */
-#define TAM_DISPLAY_API_VERSION "0.2.0"
+#define TAM_DISPLAY_API_VERSION "0.3.0"
 #define TAM_DISPLAY_MAX_OBJECTS 128
 #define TAM_DISPLAY_MAX_PROPERTIES 128
 
@@ -104,6 +104,12 @@ typedef enum tam_display_result (*tam_display_access_check)(void *, bool restori
 void tam_display_state_set_access_check(struct tam_display_state *, tam_display_access_check, void *);
 enum tam_display_result tam_display_state_keep(struct tam_display_state *,
     const char *connector, struct tam_display_error *error);
+/* End the selection, restoring captured outputs still connected on the same
+ * device. Disconnected routes are disabled, including otherwise unused shared
+ * pipelines. Requires stable object/property identities and owned references;
+ * refuses new/changed monitors, foreign routing, no surviving captured output
+ * or a topology change between TEST_ONLY and commit. Failure requires release
+ * and reporting by the owner; free() still does not perform recovery. */
 enum tam_display_result tam_display_state_restore(struct tam_display_state *,
     struct tam_display_error *error);
 void tam_display_state_free(struct tam_display_state *);

@@ -25,10 +25,12 @@ Tamlinux packages and utilities must be fast, rock-solid, and free of bloat. Rat
 ### Static libraries
 
 An optional experimental third archive, **`libtam-display.a`**, now provides
-bounded, read-only DRM/KMS inspection and pure routing analysis. It has no
+bounded DRM/KMS inspection, owned restoration and atomic transactions. It has no
 dependency on the core, portal, D-Bus or libdrm runtime. It uses installed
 libdrm UAPI headers at build time. See [the display API](docs/display.md)
-for its ownership boundary and remaining feasibility gates.
+for its ownership boundary and remaining feasibility gates. The optional
+`libtam-display-session.a` adapter uses libsystemd for session observation and seat validation,
+then existing permissions for direct device acquisition; neither dependency enters the core or portal archives.
 
 By default, `libtam` builds two static archives:
 

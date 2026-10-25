@@ -1,58 +1,137 @@
-# Experimental Linux display inspection
+# Experimental Linux console display control
 
-`tam_display.h` / `libtam-display.a` API 0.1.0 starts the native console
-monitor feasibility work. It reads an authorized DRM primary descriptor,
-enumerates connectors, CRTCs, planes and their property IDs/values, and
-analyzes the routing needed to retain one active output. It does not acquire
-devices or perform modesets. There is no runtime dependency beyond libc.
+`tam_display.h` / `libtam-display.a` API 0.2.0 provides DRM inspection,
+connector routing analysis, owned restoration references and atomic
+transactions. `tam_vt.h` verifies the caller's foreground text VT.
+`tam_display_session.h` / `libtam-display-session.a` is a separate optional
+session/seat adapter. The display archive needs only libc; the adapter needs
+libsystemd. Neither uses the portal archive or a libdrm runtime.
+
+This is a software-tested feasibility implementation. It has not established
+sustained fbcon rendering, physical monitor blanking/standby or reliable
+hardware fallback after process/device loss. The approved
+[console monitor plan](https://github.com/greenermoose/tamlinux/blob/develop/docs/plans/console-monitor-control.md)
+keeps those acceptance gates open.
+
+## Build and development package
 
 ```sh
-make display
-make test-display
+# No systemd or portal development files needed for this archive.
+make display test-display
 make install-display PREFIX=/your/development/prefix
-make uninstall-display PREFIX=/your/development/prefix
+
+# Optional systemd session adapter; does not build the portal.
+make session test-session
+make install-session PREFIX=/your/development/prefix
+make uninstall-session uninstall-display PREFIX=/your/development/prefix
 ```
 
-Build-time Linux DRM UAPI headers are discovered through
+Build-time DRM UAPI headers are found with
 `pkg-config --cflags-only-I libdrm`; `DISPLAY_CFLAGS` can supply another
-installed-header location. No libdrm functions are linked. Core-only
-`make core install-core` also avoids the portal and D-Bus development files.
-Normal `make` and `make install` retain the existing core/portal contract;
-display installation is explicit during feasibility.
+installed-header location. Normal `make` and `make install` preserve the
+existing core/portal contract. Core-only builds/install remain available.
+The optional installs include their headers, static archives and pkg-config
+metadata. Compiler flags and header dependencies invalidate objects; clients
+must also depend on the static archives. Symbols and debug information are
+retained in development builds and installs.
 
-`tam_display_inspect_fd` borrows the caller's descriptor and enables atomic
-and universal-plane visibility on that file description. The caller must
-provide legitimate device/session access and account for this capability
-change. The library never opens a card, calls SET_MASTER, changes permissions,
-or steals a seat controller. In particular, opening a primary device can
-implicitly acquire master; device acquisition needs its own reviewed adapter.
-The library does not establish foreground-VT ownership.
+## Acquisition and inspection
 
-Object and property arrays have fixed limits of 128. Kernel count changes
-and interrupted ioctls have four-attempt limits. Connector reads supply one
-mode slot to avoid the count-zero forced probe. Hardware-supplied strings
-are bounded and sanitized. Allocation is returned only after all queries
-succeed; free it with `free()`. Errors include a result code, saved errno
-and bounded explanation. Legacy drivers lacking atomic client support fail
-explicitly. The observation is not atomic and must never be replayed.
+`tam_vt_open` resolves `/dev/tty` to an owned real Linux VT. It rejects PTYs,
+foreign ownership, graphical mode, inactive VTs and background process groups.
+`tam_vt_check` can use the foreground group captured before a recovery fork.
+It never changes KD mode, keyboard mode, terminal settings or activates
+another VT. The recovery worker stays in the controlling terminal's session
+but has a separate process group. `tam_vt_claim` accepts only `VT_AUTO`, then
+owns `VT_PROCESS` handoff with blocked SIGUSR1/SIGUSR2. Restore displays and
+drop master before `tam_vt_release` acknowledges a pending switch and restores
+the saved `VT_AUTO` mode. Recovery permits the shell to regain foreground
+after UI death while requiring the same owned active text VT/session.
 
-`tam_display_plan_keep` is pure analysis on a single device observation.
-It rejects ambiguous/disconnected/inactive selections, inconsistent routing
-and invalid counts. It detaches other routed connectors while leaving a
-shared retained CRTC and its planes alone. Distinct CRTCs that happen to
-share a framebuffer remain distinct. Single-output observations produce
-no disable operations. The result is not a kernel-validated request.
+`tam_display_session_open` identifies the calling process's login session,
+checks local/active/type `tty` and the same VT, and verifies the selected primary
+DRM card's udev seat against the session. It opens only `/dev/dri/cardN`, with
+existing permissions and no symlink following, verifies the opened node's
+identity, and requests DRM master. SET_MASTER cannot evict an existing master;
+occupied or unauthorized devices fail explicitly. No permissions are changed.
 
-Queries expose mode dimensions and property values, but retain neither mode
-blobs nor framebuffer ownership. This is **not a restorable snapshot**.
-Remaining work includes VT/session acquisition, owned framebuffer/blob
-references, atomic TEST_ONLY and commit/compensation, bounded independent
-recovery, hotplug/session lifetime and physical fbcon/standby proof.
-No write API is exposed before those gates are addressed.
+Logind is an observer, not the device/controller provider. Its session state,
+removal and bus-owner changes terminate the selection. Method queries have
+two-second timeouts. `TakeControl` was evaluated and rejected for ordinary text
+VTs: systemd's [controller setup](https://github.com/systemd/systemd/blob/v262/src/login/logind-session.c#L1493)
+enters KD_GRAPHICS and mutes the keyboard, and its
+[VT reset](https://github.com/systemd/systemd/blob/v262/src/basic/terminal-util.c#L1654)
+changes VT ownership on release. The adapter never invokes TakeControl,
+TakeDevice, ReleaseControl or a privileged helper. Hosts without direct seat
+permissions report permission denial; this prototype does not broaden access.
 
-`make test-display` instruments the display objects themselves with ASan
-and UBSan. Fake ioctls exercise routing, malformed counts, changing resources,
-properties and planes, unsupported atomic capability, device disappearance,
-bounded interruption and permission failure at every query. Tests reject
-any ioctl outside the inspection allowlist. These tests do not prove the
-target GPU, physical standby or recovery.
+`tam_display_inspect_fd` remains a borrowed-descriptor observation API. It
+only enables atomic/universal-plane visibility and queries state. Object
+and property counts are capped at 128, changing counts/EINTR have bounded
+retries, connector reads avoid an implicit forced probe, and strings are
+sanitized. `free()` the returned observation. It is not a restorable snapshot.
+`tam_display_plan_keep` remains pure analysis; a shared retained CRTC and its
+planes stay enabled even when another connector is detached.
+
+## Owned references and writes
+
+`tam_display_capture_fd` duplicates an authorized primary descriptor, copies
+atomic writable properties and retains the resources needed by restoration:
+
+- Blob contents are copied into client-owned blobs, capped at 1 MiB each,
+  4 MiB total and 256 unique references.
+- `GETFB2` obtains GEM handles; `ADDFB2` registers owned framebuffer objects
+  backed by the same buffers. Shared framebuffer references are deduplicated,
+  and each unique returned GEM handle is closed once.
+- Fence descriptors/pointers are not replayed. Unsupported transient or
+  unknown object references refuse capture. Requests are capped at 4096
+  property assignments.
+- Non-destructive `CLOSEFB` support is proved with a never-attached clone
+  before any display commit. Only that unattached probe may use `RMFB` for
+  failure cleanup. Releasing real restoration references always uses
+  `CLOSEFB`, so it cannot disable restored scanout planes.
+
+The complete request using owned blob/framebuffer IDs must pass atomic
+`TEST_ONLY` before capture succeeds. The caller must install an authorization
+callback with `tam_display_state_set_access_check` and arm independent recovery
+before a real write. Writes without that callback fail. The callback runs
+immediately before every real commit, including restoration.
+
+`tam_display_state_keep` re-enumerates, builds one complete single-device
+request, tests it with `TEST_ONLY | ALLOW_MODESET`, rechecks the observation,
+and commits synchronously. It only detaches the excluded connectors and
+turns off their otherwise unused CRTCs/planes. Unsupported single-output
+selections do not fall back to whole-console blanking. Writes are never
+retried on `EINTR`, which can follow an applied transaction. Restore after
+any uncertain commit; a failed atomic test issues no display commit.
+
+`tam_display_state_restore` re-enumerates the same retained device, checks
+object/property/monitor identity and expected state, tests the owned restore
+request and commits it. Unexpected changes refuse stale replay. A successful
+restore consumes the observation: capture afresh for another selection.
+`tam_display_state_free` releases references and its duplicate descriptor;
+it does not implicitly restore or claim successful recovery.
+
+## Remaining gates and tests
+
+The bounded command prototype uses a separate recovery process that owns its
+own observation connection, VT handoff and snapshot. The UI owns no DRM fd. It uses a private
+readiness handshake, deadline, signals, device events and kernel hotplug
+notifications. UI death requests recovery; killing the recovery process is
+reported as failure. No signal handler or fixture test establishes the
+kernel's fallback if that process dies. Kernel ioctl hangs cannot be bounded
+by a userspace timer alone.
+
+Hotplug ends a trial, but safe replacement-output selection after retained
+output loss is not implemented: changed identities refuse replay. Multi-GPU
+compensation, per-output wake, persistent `keep --shell`, terminal UI parity,
+actual console framebuffer mapping, resource measurements and physical
+fbcon/VT/desktop handoff remain open. Do not install this prototype into a
+live session outside the recorded package Test route.
+
+`make test-display test-session` instruments the library objects with
+ASan/UBSan. Fake ioctl tests cover reference ownership/cleanup, shared CRTCs
+and framebuffers, kernel test/write rejection, stale state, interrupted
+commits, missing authorization, failed restore, limits and query failures.
+Fake VT/session tests verify foreground rejection, existing-permission acquisition,
+seat mismatches, existing master, session loss and cleanup. They contact no display or real bus.

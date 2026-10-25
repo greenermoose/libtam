@@ -9,17 +9,18 @@
 extern "C" {
 #endif
 
-/* Experimental read-only API, independent of the core and portal archives.
- * IDs describe one observation only; this is NOT a restorable snapshot.
- * No function opens a DRM device, acquires master or changes a display. */
-#define TAM_DISPLAY_API_VERSION "0.1.0"
+/* Experimental display API, independent of core and portal archives.
+ * Inspection IDs are transient. Only an owned state can restore displays. */
+#define TAM_DISPLAY_API_VERSION "0.2.0"
 #define TAM_DISPLAY_MAX_OBJECTS 128
 #define TAM_DISPLAY_MAX_PROPERTIES 128
 
 enum tam_display_result {
     TAM_DISPLAY_OK, TAM_DISPLAY_INVALID, TAM_DISPLAY_IO,
     TAM_DISPLAY_LIMIT, TAM_DISPLAY_STALE, TAM_DISPLAY_UNSUPPORTED,
-    TAM_DISPLAY_NOT_FOUND, TAM_DISPLAY_AMBIGUOUS
+    TAM_DISPLAY_NOT_FOUND, TAM_DISPLAY_AMBIGUOUS,
+    TAM_DISPLAY_PERMISSION, TAM_DISPLAY_INACTIVE, TAM_DISPLAY_BUSY,
+    TAM_DISPLAY_RESTORE_FAILED
 };
 
 struct tam_display_error {
@@ -86,6 +87,26 @@ struct tam_display_plan {
 enum tam_display_result tam_display_plan_keep(
     const struct tam_display_topology *topology, const char *connector,
     struct tam_display_plan *out, struct tam_display_error *error);
+
+/* Capture uses a duplicate of an authorized primary DRM descriptor. It never
+ * opens a card or takes master. Retains FB backing via GETFB2/ADDFB2 and copies
+ * blob contents into owned blobs. Requires CLOSEFB support (never RMFB active
+ * planes). No display change until apply/restore; atomic TEST_ONLY proves the
+ * complete restore request before capture succeeds. Call from one owner only.
+ * Release after restore; release uses CLOSEFB, never disables a scanout. */
+struct tam_display_state;
+enum tam_display_result tam_display_capture_fd(int fd,
+    struct tam_display_state **out, struct tam_display_error *error);
+/* Install a foreground/session authorization callback before any real commit.
+ * Caller must arm an independent recovery owner before enabling writes. */
+typedef enum tam_display_result (*tam_display_access_check)(void *, bool restoring,
+    struct tam_display_error *);
+void tam_display_state_set_access_check(struct tam_display_state *, tam_display_access_check, void *);
+enum tam_display_result tam_display_state_keep(struct tam_display_state *,
+    const char *connector, struct tam_display_error *error);
+enum tam_display_result tam_display_state_restore(struct tam_display_state *,
+    struct tam_display_error *error);
+void tam_display_state_free(struct tam_display_state *);
 
 /* Connector type names use the kernel's sysfs spelling. */
 void tam_display_connector_name(uint32_t type, uint32_t number,

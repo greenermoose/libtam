@@ -22,9 +22,15 @@ Tamlinux packages and utilities must be fast, rock-solid, and free of bloat. Rat
 | **`tam_term`** | `tam_log_*` | Colorized terminal logging and terminal escape sequence utilities. |
 | **`tam_portal`** | `tam_portal_*` in `<tam_portal.h>` | Native desktop portal integration (FileChooser via D-Bus session bus). A separate library, `libtam-portal`. |
 
-### Two static libraries
+### Static libraries
 
-`libtam` builds two static archives:
+An optional experimental third archive, **`libtam-display.a`**, now provides
+bounded, read-only DRM/KMS inspection and pure routing analysis. It has no
+dependency on the core, portal, D-Bus or libdrm runtime. It uses installed
+libdrm UAPI headers at build time. See [the display API](docs/display.md)
+for its ownership boundary and remaining feasibility gates.
+
+By default, `libtam` builds two static archives:
 
 - **`libtam.a`** is the core. It needs only libc.
 - **`libtam-portal.a`** holds the desktop portal. It needs D-Bus, so it is
@@ -48,6 +54,13 @@ make
 
 # Run the test suite under AddressSanitizer and UndefinedBehaviorSanitizer
 make test
+
+# Optional display work: no portal or D-Bus development files needed
+make display test-display
+make install-display PREFIX=/your/development/prefix
+
+# Core-only development installation, also without portal dependencies
+make core install-core PREFIX=/your/development/prefix
 
 # Install to system
 sudo make install PREFIX=/usr/local

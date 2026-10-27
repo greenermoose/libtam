@@ -1,5 +1,7 @@
 # AI development records
 
+- [2026-10-27 — display recovery classification](2026-10-27-monitor-integration.md)
+
 - [2026-10-25 — Retained-output unplug recovery](2026-10-25-monitor-unplug.md)
 
 - [2026-10-25 — Native monitor ownership and guarded transactions](2026-10-25-monitor-ownership.md)

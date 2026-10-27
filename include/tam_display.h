@@ -11,7 +11,7 @@ extern "C" {
 
 /* Experimental display API, independent of core and portal archives.
  * Inspection IDs are transient. Only an owned state can restore displays. */
-#define TAM_DISPLAY_API_VERSION "0.4.0"
+#define TAM_DISPLAY_API_VERSION "0.4.1"
 #define TAM_DISPLAY_MAX_OBJECTS 128
 #define TAM_DISPLAY_MAX_PROPERTIES 128
 
@@ -151,6 +151,10 @@ enum tam_display_result tam_display_state_wake(struct tam_display_state *,
     const char *connector, struct tam_display_error *error);
 bool tam_display_state_is_detached(const struct tam_display_state *,
     const char *connector);
+/* True after an actual atomic ioctl fails: the effect may be uncertain.
+ * Stop new mutations and attempt restoration only after session authorization.
+ * Validation failures before the ioctl do not set this flag. */
+bool tam_display_state_recovery_required(const struct tam_display_state *);
 /* End the selection, restoring captured outputs still connected on the same
  * device. Disconnected routes are disabled, including otherwise unused shared
  * pipelines. Requires stable object/property identities and owned references;

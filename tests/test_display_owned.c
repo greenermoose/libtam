@@ -397,6 +397,7 @@ int main(void)
 
     f = fixture(); s = capture(&f); f.fail_test = 2;
     assert(tam_display_state_keep(s, "DP-1", &e) != TAM_DISPLAY_OK && !f.commits);
+    assert(!tam_display_state_recovery_required(s));
     assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK); cleanup(&f, s);
     f = fixture(); s = capture(&f); f.stale_at = f.reads + 2;
     assert(tam_display_state_keep(s, "DP-1", &e) == TAM_DISPLAY_STALE && !f.commits); cleanup(&f, s);
@@ -410,7 +411,28 @@ int main(void)
     /* EINTR after an applied commit is not retried. Owned restoration still works. */
     f = fixture(); s = capture(&f); f.interrupted_commit = true;
     assert(tam_display_state_keep(s, "DP-1", &e) != TAM_DISPLAY_OK && f.commits == 1);
-    assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK && f.commits == 2); cleanup(&f, s);
+    assert(tam_display_state_recovery_required(s));
+    assert(tam_display_state_keep(s, "DP-1", &e) == TAM_DISPLAY_RESTORE_FAILED && f.commits == 1);
+    assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK && f.commits == 2);
+    assert(!tam_display_state_recovery_required(s)); cleanup(&f, s);
+    /* A post-start interactive write can fail at the real ioctl boundary too. */
+    f = fixture(); s = capture(&f);
+    assert(tam_display_state_keep(s, "DP-1", &e) == TAM_DISPLAY_OK);
+    assert(tam_display_state_wake(s, "HDMI-A-1", &e) == TAM_DISPLAY_OK);
+    f.interrupted_commit = true;
+    const char *requested[] = {"HDMI-A-1"};
+    assert(tam_display_state_blank(s, requested, 1, &e) != TAM_DISPLAY_OK);
+    assert(tam_display_state_recovery_required(s));
+    assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK);
+    assert(!tam_display_state_recovery_required(s)); cleanup(&f, s);
+    /* An atomic rejection may instead leave the previous selection intact. */
+    f = fixture(); s = capture(&f);
+    assert(tam_display_state_keep(s, "DP-1", &e) == TAM_DISPLAY_OK);
+    f.fail_commit = f.commits + 1;
+    assert(tam_display_state_keep(s, "HDMI-A-1", &e) != TAM_DISPLAY_OK);
+    assert(tam_display_state_recovery_required(s));
+    assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK);
+    assert(!tam_display_state_recovery_required(s)); cleanup(&f, s);
     f = fixture(); s = capture(&f); f.fail_commit = 1;
     assert(tam_display_state_keep(s, "DP-1", &e) != TAM_DISPLAY_OK);
     assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK); cleanup(&f, s);

@@ -45,8 +45,10 @@ enum tam_display_result tam_display_atomic(struct tam_display_state *s,
         enum tam_display_result rc = s->access_check(s->access_context, s->restoring, e);
         if (rc) { free(p); return rc; }
     }
+    if (!test && !s->restoring) s->uncertain_change = *r;
     int result = tam_display_call(s, DRM_IOCTL_MODE_ATOMIC, &a), saved = errno;
     free(p);
+    if (result < 0 && !test) s->recovery_required = true;
     if (result < 0) return tam_display_fail(e,
         saved == EPERM || saved == EACCES ? TAM_DISPLAY_PERMISSION :
         saved == ENOENT || saved == ENODEV ? TAM_DISPLAY_STALE : TAM_DISPLAY_IO,
@@ -59,7 +61,7 @@ static bool transient(const struct tam_display_property *p)
     return !strcmp(p->name, "IN_FENCE_FD") || !strcmp(p->name, "OUT_FENCE_PTR");
 }
 
-static bool same_object(struct tam_display_state *s, const struct tam_display_object *old,
+static bool same_object(const struct tam_display_request *change, const struct tam_display_object *old,
     const struct tam_display_object *now, bool recovery, bool disconnected, bool orphan)
 {
     if (old->id != now->id || old->property_count != now->property_count) return false;
@@ -82,8 +84,8 @@ static bool same_object(struct tam_display_state *s, const struct tam_display_ob
             !strcmp(a->name, "MODE_ID") || !strcmp(a->name, "CRTC_ID") ||
             !strcmp(a->name, "FB_ID"))) continue;
         bool ours = false;
-        if (recovery) for (size_t j = 0; j < s->change.count; ++j) {
-            const struct tam_display_write *w = &s->change.writes[j];
+        if (recovery) for (size_t j = 0; j < change->count; ++j) {
+            const struct tam_display_write *w = &change->writes[j];
             if (w->object == old->id && w->property == a->id && w->value == b->value) ours = true;
         }
         if (!ours) return false;
@@ -114,7 +116,7 @@ static bool routed(const struct tam_display_topology *old,
 /* A shared CRTC can lose its sole selected route even though another,
  * deliberately detached connector on that CRTC is still plugged in. Permit
  * kernel disablement there, then restore the surviving baseline route. */
-static bool lost_pipeline(struct tam_display_state *s,
+static bool lost_pipeline(const struct tam_display_request *change,
     const struct tam_display_topology *old, const struct tam_display_topology *now,
     uint32_t crtc)
 {
@@ -124,10 +126,10 @@ static bool lost_pipeline(struct tam_display_state *s,
         uint64_t route = a->crtc_id;
         for (size_t p = 0; p < a->object.property_count; ++p) {
             if (strcmp(a->object.properties[p].name, "CRTC_ID")) continue;
-            for (size_t j = 0; j < s->change.count; ++j)
-                if (s->change.writes[j].object == a->object.id &&
-                    s->change.writes[j].property == a->object.properties[p].id)
-                    route = s->change.writes[j].value;
+            for (size_t j = 0; j < change->count; ++j)
+                if (change->writes[j].object == a->object.id &&
+                    change->writes[j].property == a->object.properties[p].id)
+                    route = change->writes[j].value;
         }
         if (route != crtc || a->connection != 1) continue;
         const struct tam_display_connector *b = find_connector(now, a->object.id);
@@ -137,9 +139,8 @@ static bool lost_pipeline(struct tam_display_state *s,
     return lost;
 }
 
-static bool same_topology(struct tam_display_state *s,
-    const struct tam_display_topology *old, const struct tam_display_topology *now,
-    bool recovery)
+static bool same_topology(const struct tam_display_topology *old, const struct tam_display_topology *now,
+    bool recovery, const struct tam_display_request *change)
 {
     if (strcmp(now->driver, old->driver) || now->connector_count > old->connector_count ||
         (!recovery && now->connector_count != old->connector_count) ||
@@ -166,15 +167,15 @@ static bool same_topology(struct tam_display_state *s,
         if (!c) continue;
         bool disconnected = recovery && old->connectors[i].connection == 1 && c->connection == 2;
         if (strcmp(old->connectors[i].name, c->name) ||
-            !same_object(s, &old->connectors[i].object, &c->object,
+            !same_object(change, &old->connectors[i].object, &c->object,
                 recovery, disconnected, false)) return false;
     }
     for (size_t i = 0; i < old->crtc_count; ++i)
-        if (!same_object(s, &old->crtcs[i].object, &now->crtcs[i].object, recovery, false,
-            unplug && lost_pipeline(s, old, now, old->crtcs[i].object.id))) return false;
+        if (!same_object(change, &old->crtcs[i].object, &now->crtcs[i].object, recovery, false,
+            unplug && lost_pipeline(change, old, now, old->crtcs[i].object.id))) return false;
     for (size_t i = 0; i < old->plane_count; ++i)
-        if (!same_object(s, &old->planes[i].object, &now->planes[i].object, recovery, false,
-            unplug && old->planes[i].crtc_id && lost_pipeline(s, old, now, old->planes[i].crtc_id))) return false;
+        if (!same_object(change, &old->planes[i].object, &now->planes[i].object, recovery, false,
+            unplug && old->planes[i].crtc_id && lost_pipeline(change, old, now, old->planes[i].crtc_id))) return false;
     return true;
 }
 
@@ -186,7 +187,14 @@ static enum tam_display_result observe(struct tam_display_state *s, bool recover
      * changed identities, objects or foreign routing still fail closed. */
     enum tam_display_result rc = tam_display_inspect_with(s->fd, out, e, s->call, s->context);
     if (rc) return rc;
-    if (same_topology(s, s->baseline, *out, recovery)) return TAM_DISPLAY_OK;
+    if (same_topology(s->baseline, *out, recovery, &s->change)) return TAM_DISPLAY_OK;
+    if (recovery && s->recovery_required &&
+        same_topology(s->baseline, *out, true, &s->uncertain_change)) {
+        /* An interrupted commit may have installed the complete attempted
+         * request. Bind recovery to that whole observed state, never a mix. */
+        s->change = s->uncertain_change;
+        return TAM_DISPLAY_OK;
+    }
     free(*out); *out = NULL;
     return tam_display_fail(e, TAM_DISPLAY_STALE, 0,
         "Display identity, routing or properties changed outside this transaction");
@@ -229,6 +237,7 @@ enum tam_display_result tam_display_state_keep(struct tam_display_state *s,
 {
     if (e) *e = (struct tam_display_error){0};
     if (!s || !s->baseline) return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "A valid owned display state is required");
+    if (s->recovery_required) return tam_display_fail(e, TAM_DISPLAY_RESTORE_FAILED, 0, "Restore is required before further mutations");
     struct tam_display_plan plan;
     enum tam_display_result rc = tam_display_plan_keep(s->baseline, connector, &plan, e);
     if (rc) return rc;
@@ -368,7 +377,7 @@ enum tam_display_result tam_display_state_restore(struct tam_display_state *s,
      * A second unplug/replug, even another otherwise permissible loss, cancels
      * this request. No retry can postpone release indefinitely. */
     if (!rc) rc = tam_display_inspect_with(s->fd, &now, e, s->call, s->context);
-    if (!rc && !same_topology(s, tested, now, false))
+    if (!rc && !same_topology(tested, now, false, &s->change))
         rc = tam_display_fail(e, TAM_DISPLAY_STALE, 0, "Display changed during recovery validation");
     if (!rc) rc = tam_display_atomic(s, request, false, e);
     free(now); free(tested); free(request);
@@ -377,6 +386,7 @@ enum tam_display_result tam_display_state_restore(struct tam_display_state *s,
         return TAM_DISPLAY_RESTORE_FAILED;
     }
     s->changed = false;
+    s->recovery_required = false;
     s->detached_count = 0;
     /* A restored state uses new owned IDs. Do not reuse its old observation. */
     s->change.count = 0;
@@ -418,7 +428,7 @@ static enum tam_display_result apply_plan_from_restore(struct tam_display_state 
         rc = tam_display_atomic(s, request, true, e);
     }
     if (!rc) rc = tam_display_inspect_with(s->fd, &now, e, s->call, s->context);
-    if (!rc && !same_topology(s, tested, now, false))
+    if (!rc && !same_topology(tested, now, false, &s->change))
         rc = tam_display_fail(e, TAM_DISPLAY_STALE, 0, "Display changed during transaction validation");
     if (!rc) {
         s->changed = true;
@@ -441,6 +451,7 @@ enum tam_display_result tam_display_state_blank(struct tam_display_state *s,
     if (e) *e = (struct tam_display_error){0};
     if (!s || !s->baseline || !connectors || !connector_count || connector_count > TAM_DISPLAY_MAX_OBJECTS)
         return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Invalid state or blank connector selection");
+    if (s->recovery_required) return tam_display_fail(e, TAM_DISPLAY_RESTORE_FAILED, 0, "Restore is required before further mutations");
     struct tam_display_plan plan;
     enum tam_display_result rc;
     if (!s->changed) {
@@ -501,6 +512,7 @@ enum tam_display_result tam_display_state_wake(struct tam_display_state *s,
     if (e) *e = (struct tam_display_error){0};
     if (!s || !s->baseline || !connector || !*connector)
         return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Invalid state or connector to wake");
+    if (s->recovery_required) return tam_display_fail(e, TAM_DISPLAY_RESTORE_FAILED, 0, "Restore is required before further mutations");
     const struct tam_display_connector *target = NULL;
     for (size_t i = 0; i < s->baseline->connector_count; ++i) {
         const struct tam_display_connector *c = &s->baseline->connectors[i];
@@ -531,4 +543,9 @@ enum tam_display_result tam_display_state_wake(struct tam_display_state *s,
     enum tam_display_result rc = tam_display_plan_blank(s->baseline, remaining, remaining_count, &plan, e);
     if (rc) return rc;
     return apply_plan_from_restore(s, &plan, target->object.id, e);
+}
+
+bool tam_display_state_recovery_required(const struct tam_display_state *s)
+{
+    return s && s->recovery_required;
 }

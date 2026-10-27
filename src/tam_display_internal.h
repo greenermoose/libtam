@@ -23,13 +23,13 @@ struct tam_display_state {
     tam_display_ioctl_fn call;
     void *context;
     struct tam_display_topology *baseline;
-    struct tam_display_request restore, change;
+    struct tam_display_request restore, change, uncertain_change;
     struct tam_display_ref fbs[TAM_DISPLAY_MAX_REFS], blobs[TAM_DISPLAY_MAX_REFS];
     size_t fb_count, blob_count, blob_bytes;
     uint32_t detached[TAM_DISPLAY_MAX_OBJECTS];
     size_t detached_count;
     uint32_t console_fb_id;
-    bool changed, close_fd, restoring;
+    bool changed, close_fd, restoring, recovery_required;
     tam_display_access_check access_check;
     void *access_context;
 };

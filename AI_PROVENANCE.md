@@ -24,3 +24,5 @@ Physical recovery and deployment remain separate gates.
 DRM GETFB2 geometry verification, targeted atomic blank/wake state transitions and TIOCLINUX VT
 console blank/wake ioctls (display API 0.4.0).
 [Session](docs/ai/2026-10-26-console-fb-and-wake.md).
+
+2026-10-27: Codex CLI `0.164.0` (`gpt-6.1-terra`) worked on display recovery classification. [Session](docs/ai/2026-10-27-monitor-integration.md).

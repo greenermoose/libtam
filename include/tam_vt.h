@@ -25,4 +25,14 @@ enum tam_display_result tam_vt_check_restore(const struct tam_vt *, struct tam_d
 enum tam_display_result tam_vt_claim(struct tam_vt *, struct tam_display_error *);
 enum tam_display_result tam_vt_release(struct tam_vt *, bool handoff, struct tam_display_error *);
 void tam_vt_close(struct tam_vt *);
+
+/* Whole-VT TIOCLINUX blank/wake and runtime consoleblank idle timer (0..60 min).
+ * Requires the caller's owned active foreground text VT. */
+enum tam_display_result tam_vt_blank(const struct tam_vt *, struct tam_display_error *);
+enum tam_display_result tam_vt_wake(const struct tam_vt *, struct tam_display_error *);
+enum tam_display_result tam_vt_idle_seconds_path(const char *param_path, int *seconds_out);
+enum tam_display_result tam_vt_idle_path(const struct tam_vt *, unsigned minutes,
+    const char *param_path, bool *verified, struct tam_display_error *);
+enum tam_display_result tam_vt_idle(const struct tam_vt *, unsigned minutes,
+    bool *verified, struct tam_display_error *);
 #endif

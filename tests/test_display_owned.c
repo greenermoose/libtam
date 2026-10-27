@@ -344,6 +344,35 @@ int main(void)
     assert(tam_display_state_restore(s, &e) == TAM_DISPLAY_OK && f.commits == 2);
     cleanup(&f, s);
 
+    /* Verify console framebuffer geometry and individual blank/wake transitions. */
+    f = fixture(); s = capture(&f);
+    struct tam_console_fb cfb = {.vt_number = 2, .fb_index = 0, .card = 1,
+        .width = 1920, .height = 1080, .stride = 7680, .bits_per_pixel = 32};
+    assert(tam_display_state_verify_console_fb(s, &cfb, &e) == TAM_DISPLAY_OK && cfb.drm_fb_id == 77);
+    cfb.stride = 4096;
+    assert(tam_display_state_verify_console_fb(s, &cfb, &e) == TAM_DISPLAY_UNSUPPORTED);
+    assert(tam_display_state_keep(s, "DP-1", &e) == TAM_DISPLAY_OK);
+    assert(tam_display_state_is_detached(s, "DP-2") && tam_display_state_is_detached(s, "HDMI-A-1"));
+    assert(!tam_display_state_is_detached(s, "DP-1"));
+    /* Wake HDMI-A-1 individually while keeping DP-2 blanked. */
+    assert(tam_display_state_wake(s, "HDMI-A-1", &e) == TAM_DISPLAY_OK);
+    assert(tam_display_state_is_detached(s, "DP-2") && !tam_display_state_is_detached(s, "HDMI-A-1"));
+    assert(f.t->connectors[1].object.properties[0].value == 0);
+    assert(f.t->connectors[2].object.properties[0].value == 11);
+    assert(f.t->crtcs[1].object.properties[0].value == 1);
+    assert(f.t->planes[1].object.properties[1].value == 700);
+    /* Blank HDMI-A-1 again incrementally, then wake DP-2 and HDMI-A-1. */
+    const char *reblank[] = {"card1-HDMI-A-1"};
+    assert(tam_display_state_blank(s, reblank, 1, &e) == TAM_DISPLAY_OK);
+    assert(tam_display_state_is_detached(s, "HDMI-A-1") && f.t->crtcs[1].object.properties[0].value == 0);
+    const char *all_remaining[] = {"DP-1"};
+    assert(tam_display_state_blank(s, all_remaining, 1, &e) == TAM_DISPLAY_UNSUPPORTED);
+    assert(tam_display_state_wake(s, "DP-2", &e) == TAM_DISPLAY_OK);
+    assert(!tam_display_state_is_detached(s, "DP-2") && tam_display_state_is_detached(s, "HDMI-A-1"));
+    assert(tam_display_state_wake(s, "HDMI-A-1", &e) == TAM_DISPLAY_OK);
+    assert(!s->changed && !tam_display_state_is_detached(s, "HDMI-A-1"));
+    cleanup(&f, s);
+
     /* Every capture ioctl failure is propagated; no real modeset is issued. */
     for (unsigned fail = 1; fail <= 9; ++fail) {
         f = fixture(); f.fail_at = fail; s = NULL;

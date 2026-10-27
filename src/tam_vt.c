@@ -10,6 +10,9 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <termios.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 static bool valid(dev_t d) { return major(d) == 4 && minor(d) >= 1 && minor(d) <= 63; }
@@ -102,4 +105,75 @@ enum tam_display_result tam_vt_release(struct tam_vt *v, bool handoff, struct ta
 void tam_vt_close(struct tam_vt *v)
 {
     if (v && v->fd >= 0) { close(v->fd); v->fd = -1; }
+}
+
+enum tam_display_result tam_vt_blank(const struct tam_vt *v, struct tam_display_error *e)
+{
+    enum tam_display_result rc = tam_vt_check(v, e);
+    if (rc) return rc;
+    unsigned char subcode = 14; /* TIOCL_BLANKSCREEN */
+    if (ioctl(v->fd, TIOCLINUX, &subcode) < 0)
+        return tam_display_fail(e, errno == EPERM || errno == EACCES ? TAM_DISPLAY_PERMISSION : TAM_DISPLAY_IO,
+            errno, "Cannot blank Linux text console");
+    return TAM_DISPLAY_OK;
+}
+
+enum tam_display_result tam_vt_wake(const struct tam_vt *v, struct tam_display_error *e)
+{
+    enum tam_display_result rc = tam_vt_check_restore(v, e);
+    if (rc) return rc;
+    unsigned char subcode = 4; /* TIOCL_UNBLANKSCREEN */
+    if (ioctl(v->fd, TIOCLINUX, &subcode) < 0)
+        return tam_display_fail(e, errno == EPERM || errno == EACCES ? TAM_DISPLAY_PERMISSION : TAM_DISPLAY_IO,
+            errno, "Cannot wake Linux text console");
+    return TAM_DISPLAY_OK;
+}
+
+enum tam_display_result tam_vt_idle_seconds_path(const char *param_path, int *seconds_out)
+{
+    if (!seconds_out) return TAM_DISPLAY_INVALID;
+    *seconds_out = -1;
+    const char *path = param_path && *param_path ? param_path : "/sys/module/kernel/parameters/consoleblank";
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return TAM_DISPLAY_UNSUPPORTED;
+    char buf[64];
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return TAM_DISPLAY_UNSUPPORTED;
+    buf[n] = 0;
+    char *end = NULL;
+    errno = 0;
+    long v = strtol(buf, &end, 10);
+    if (errno || end == buf || (*end && *end != '\n' && *end != '\r' && *end != ' ') || v < 0 || v > 86400)
+        return TAM_DISPLAY_UNSUPPORTED;
+    *seconds_out = (int)v;
+    return TAM_DISPLAY_OK;
+}
+
+enum tam_display_result tam_vt_idle_path(const struct tam_vt *v, unsigned minutes,
+    const char *param_path, bool *verified, struct tam_display_error *e)
+{
+    if (verified) *verified = false;
+    if (minutes > 60)
+        return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Idle interval must be 0-60 minutes");
+    enum tam_display_result rc = tam_vt_check(v, e);
+    if (rc) return rc;
+    char seq[32];
+    int len = snprintf(seq, sizeof(seq), "\x1b[9;%u]", minutes);
+    if (len <= 0 || write(v->fd, seq, (size_t)len) != len)
+        return tam_display_fail(e, TAM_DISPLAY_IO, errno, "Cannot write console idle sequence");
+    (void)tcdrain(v->fd);
+    int actual = -1;
+    if (tam_vt_idle_seconds_path(param_path, &actual) == TAM_DISPLAY_OK) {
+        if (actual != (int)(minutes * 60))
+            return tam_display_fail(e, TAM_DISPLAY_IO, 0, "Console idle interval verification failed");
+        if (verified) *verified = true;
+    }
+    return TAM_DISPLAY_OK;
+}
+
+enum tam_display_result tam_vt_idle(const struct tam_vt *v, unsigned minutes,
+    bool *verified, struct tam_display_error *e)
+{
+    return tam_vt_idle_path(v, minutes, NULL, verified, e);
 }

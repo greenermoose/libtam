@@ -3,9 +3,13 @@
 #include <drm_mode.h>
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <linux/fb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 struct fixture {
     unsigned calls, fail_at, resource_reads, property_reads, plane_reads;
@@ -149,6 +153,114 @@ static void planning(void)
     assert(tam_display_plan_keep(t, "DP-1", &p, &e) == TAM_DISPLAY_OK);
     assert(!p.detach_count && !p.disable_crtc_count && !p.disable_plane_count);
     free(t);
+
+    /* Targeted blank planning: blank 1 or 2 connectors, refuse blanking all 3. */
+    t = observe(&f);
+    assert(tam_display_plan_keep(t, "card1-DP-1", &p, &e) == TAM_DISPLAY_OK && p.keep_connector == 100);
+    const char *one[] = {"DP-2"};
+    assert(tam_display_plan_blank(t, one, 1, &p, &e) == TAM_DISPLAY_OK);
+    assert(p.keep_connector == 100 && p.detach_count == 1 && p.detach[0] == 101);
+    assert(p.disable_crtc_count == 0 && p.disable_plane_count == 0);
+    const char *two[] = {"card1-DP-2", "DP-3"};
+    assert(tam_display_plan_blank(t, two, 2, &p, &e) == TAM_DISPLAY_OK);
+    assert(p.keep_connector == 100 && p.detach_count == 2);
+    assert(p.disable_crtc_count == 1 && p.disable_crtcs[0] == 11);
+    assert(p.disable_plane_count == 1 && p.disable_planes[0] == 201);
+    const char *all3[] = {"DP-1", "DP-2", "DP-3"};
+    assert(tam_display_plan_blank(t, all3, 3, &p, &e) == TAM_DISPLAY_UNSUPPORTED);
+    const char *dup[] = {"DP-2", "card1-DP-2"};
+    assert(tam_display_plan_blank(t, dup, 2, &p, &e) == TAM_DISPLAY_INVALID);
+    struct tam_console_fb cfb = {.vt_number = 2, .fb_index = 0, .card = 1,
+        .width = 1920, .height = 1080, .stride = 7680, .bits_per_pixel = 32};
+    assert(tam_display_verify_console_fb(t, &cfb, &e) == TAM_DISPLAY_OK && cfb.drm_fb_id == 77);
+    cfb.width = 1280;
+    assert(tam_display_verify_console_fb(t, &cfb, &e) == TAM_DISPLAY_UNSUPPORTED);
+    free(t);
+}
+
+struct fbcon_fixture {
+    unsigned mapped_fb;
+    int ioctl_errno;
+};
+static int fake_fbcon_ioctl(void *context, int fd, unsigned long request, void *arg)
+{
+    (void)fd;
+    struct fbcon_fixture *fx = context;
+    assert(request == FBIOGET_CON2FBMAP);
+    if (fx->ioctl_errno) { errno = fx->ioctl_errno; return -1; }
+    struct fb_con2fbmap *m = arg;
+    assert(m->console == 2);
+    m->framebuffer = fx->mapped_fb;
+    return 0;
+}
+static void write_file(const char *path, const char *content)
+{
+    FILE *fp = fopen(path, "w");
+    assert(fp);
+    fputs(content, fp);
+    fclose(fp);
+}
+static void fbcon_mapping_checks(void)
+{
+    char root[] = "/tmp/tam-fbcon-test-XXXXXX";
+    assert(mkdtemp(root));
+    char path[512];
+    snprintf(path, sizeof(path), "%s/class/vtconsole/vtcon0", root);
+    assert(mkdir(root, 0700) == 0 || errno == EEXIST);
+    char cmd[640];
+    snprintf(cmd, sizeof(cmd),
+        "mkdir -p '%s/class/vtconsole/vtcon0' '%s/class/vtconsole/vtcon1' "
+        "'%s/class/graphics/fb0/device/drm/card1' '%s/dev'",
+        root, root, root, root);
+    assert(system(cmd) == 0);
+    snprintf(path, sizeof(path), "%s/class/vtconsole/vtcon0/bind", root); write_file(path, "0\n");
+    snprintf(path, sizeof(path), "%s/class/vtconsole/vtcon0/name", root); write_file(path, "(S) dummy device\n");
+    snprintf(path, sizeof(path), "%s/class/vtconsole/vtcon1/bind", root); write_file(path, "1\n");
+    snprintf(path, sizeof(path), "%s/class/vtconsole/vtcon1/name", root); write_file(path, "(M) frame buffer device\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb0/state", root); write_file(path, "0\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb0/name", root); write_file(path, "amdgpudrmfb\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb0/virtual_size", root); write_file(path, "1920,1080\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb0/stride", root); write_file(path, "7680\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb0/bits_per_pixel", root); write_file(path, "32\n");
+
+    struct tam_console_fb out;
+    struct tam_display_error e;
+    struct fbcon_fixture fx = {.mapped_fb = 0, .ioctl_errno = 0};
+    assert(tam_display_map_console_fb_with(2, root, "/dev", &out, &e, fake_fbcon_ioctl, &fx) == TAM_DISPLAY_OK);
+    assert(out.vt_number == 2 && out.fb_index == 0 && out.card == 1 && out.con2fb_verified);
+    assert(out.width == 1920 && out.height == 1080 && out.stride == 7680 && out.bits_per_pixel == 32);
+    assert(!strcmp(out.fb_name, "amdgpudrmfb"));
+
+    /* EACCES on /dev/fb0 falls back cleanly when only one fb device exists. */
+    fx.ioctl_errno = EACCES;
+    assert(tam_display_map_console_fb_with(2, root, "/dev", &out, &e, fake_fbcon_ioctl, &fx) == TAM_DISPLAY_OK);
+    assert(!out.con2fb_verified && out.fb_index == 0 && out.card == 1);
+
+    /* With a second fb device, EACCES refuses ambiguous fallback, while CON2FBMAP resolves fb1 -> card2. */
+    snprintf(cmd, sizeof(cmd), "mkdir -p '%s/class/graphics/fb1/device/drm/card2'", root);
+    assert(system(cmd) == 0);
+    snprintf(path, sizeof(path), "%s/class/graphics/fb1/state", root); write_file(path, "0\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb1/name", root); write_file(path, "inteldrmfb\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb1/virtual_size", root); write_file(path, "2560,1440\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb1/stride", root); write_file(path, "10240\n");
+    snprintf(path, sizeof(path), "%s/class/graphics/fb1/bits_per_pixel", root); write_file(path, "32\n");
+    assert(tam_display_map_console_fb_with(2, root, "/dev", &out, &e, fake_fbcon_ioctl, &fx) == TAM_DISPLAY_AMBIGUOUS);
+    fx.ioctl_errno = 0; fx.mapped_fb = 1;
+    assert(tam_display_map_console_fb_with(2, root, "/dev", &out, &e, fake_fbcon_ioctl, &fx) == TAM_DISPLAY_OK);
+    assert(out.con2fb_verified && out.fb_index == 1 && out.card == 2 && out.width == 2560);
+
+    /* Non-DRM framebuffer (efifb without device/drm) is rejected as unsupported. */
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s/class/graphics/fb1/device/drm'", root);
+    assert(system(cmd) == 0);
+    assert(tam_display_map_console_fb_with(2, root, "/dev", &out, &e, fake_fbcon_ioctl, &fx) == TAM_DISPLAY_UNSUPPORTED);
+
+    /* Unbound fbcon is rejected. */
+    snprintf(path, sizeof(path), "%s/class/vtconsole/vtcon1/bind", root); write_file(path, "0\n");
+    fx.mapped_fb = 0;
+    assert(tam_display_map_console_fb_with(2, root, "/dev", &out, &e, fake_fbcon_ioctl, &fx) == TAM_DISPLAY_UNSUPPORTED);
+
+    snprintf(cmd, sizeof(cmd), "rm -rf '%s'", root);
+    assert(system(cmd) == 0);
 }
 
 int main(void)
@@ -178,6 +290,7 @@ int main(void)
     assert(tam_display_inspect_fd(-1, &t, NULL) == TAM_DISPLAY_INVALID && !t);
     assert(tam_display_inspect_fd(0, NULL, NULL) == TAM_DISPLAY_INVALID);
     planning();
+    fbcon_mapping_checks();
     char name[40];
     tam_display_connector_name(11, 2, name, sizeof(name));
     assert(!strcmp(name, "HDMI-A-2"));

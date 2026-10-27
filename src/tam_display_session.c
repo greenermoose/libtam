@@ -139,6 +139,17 @@ enum tam_display_result tam_display_session_open(const struct tam_vt *v, unsigne
 fail:
     tam_display_session_close(s); return rc;
 }
+enum tam_display_result tam_display_session_open_console(const struct tam_vt *v,
+    struct tam_console_fb *fb, struct tam_display_session **out,
+    struct tam_display_error *e)
+{
+    if (out) *out = NULL;
+    if (!v || !v->claimed || !fb || !out)
+        return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Owned foreground VT handoff and console framebuffer output are required");
+    enum tam_display_result rc = tam_display_map_console_fb(v->number, fb, e);
+    if (rc) return rc;
+    return tam_display_session_open(v, fb->card, out, e);
+}
 int tam_display_session_device(const struct tam_display_session *s) { return s ? s->fd : -1; }
 int tam_display_session_bus_fd(struct tam_display_session *s) { return s ? sd_bus_get_fd(s->bus) : -1; }
 int tam_display_session_bus_events(struct tam_display_session *s) { return s ? sd_bus_get_events(s->bus) : 0; }

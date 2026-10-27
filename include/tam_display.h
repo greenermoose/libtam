@@ -11,7 +11,7 @@ extern "C" {
 
 /* Experimental display API, independent of core and portal archives.
  * Inspection IDs are transient. Only an owned state can restore displays. */
-#define TAM_DISPLAY_API_VERSION "0.3.0"
+#define TAM_DISPLAY_API_VERSION "0.4.0"
 #define TAM_DISPLAY_MAX_OBJECTS 128
 #define TAM_DISPLAY_MAX_PROPERTIES 128
 
@@ -87,6 +87,36 @@ struct tam_display_plan {
 enum tam_display_result tam_display_plan_keep(
     const struct tam_display_topology *topology, const char *connector,
     struct tam_display_plan *out, struct tam_display_error *error);
+/* Analyze detaching one or more named connectors while keeping at least one
+ * connected active console output lit. Names may be "DP-1" or "card1-DP-1". */
+enum tam_display_result tam_display_plan_blank(
+    const struct tam_display_topology *topology,
+    const char *const *connectors, size_t connector_count,
+    struct tam_display_plan *out, struct tam_display_error *error);
+
+/* Map a Linux VT (1..63) to its bound fbcon framebuffer (fbN) and primary
+ * DRM card (cardM). Refuses unbound fbcon, inactive fb devices, non-DRM
+ * framebuffers (efifb/vesafb/simplefb) and ambiguous multi-fb mappings when
+ * FBIOGET_CON2FBMAP is unavailable. */
+struct tam_console_fb {
+    unsigned vt_number;
+    unsigned fb_index;
+    unsigned card;
+    uint32_t width, height, stride, bits_per_pixel;
+    uint32_t drm_fb_id;
+    bool con2fb_verified;
+    char fb_name[64];
+};
+enum tam_display_result tam_display_map_console_fb(unsigned vt_number,
+    struct tam_console_fb *out, struct tam_display_error *error);
+enum tam_display_result tam_display_map_console_fb_root(unsigned vt_number,
+    const char *sysfs_root, const char *dev_root,
+    struct tam_console_fb *out, struct tam_display_error *error);
+/* Verify that the DRM topology has an active console scanout compatible with
+ * the mapped fbcon device and record its DRM framebuffer ID in fb->drm_fb_id. */
+enum tam_display_result tam_display_verify_console_fb(
+    const struct tam_display_topology *topology, struct tam_console_fb *fb,
+    struct tam_display_error *error);
 
 /* Capture uses a duplicate of an authorized primary DRM descriptor. It never
  * opens a card or takes master. Retains FB backing via GETFB2/ADDFB2 and copies
@@ -97,6 +127,11 @@ enum tam_display_result tam_display_plan_keep(
 struct tam_display_state;
 enum tam_display_result tam_display_capture_fd(int fd,
     struct tam_display_state **out, struct tam_display_error *error);
+/* Verify captured DRM framebuffer dimensions/stride/handles against the
+ * mapped fbcon device and bind the state to that console framebuffer. */
+enum tam_display_result tam_display_state_verify_console_fb(
+    struct tam_display_state *state, struct tam_console_fb *fb,
+    struct tam_display_error *error);
 /* Install a foreground/session authorization callback before any real commit.
  * Caller must arm an independent recovery owner before enabling writes. */
 typedef enum tam_display_result (*tam_display_access_check)(void *, bool restoring,
@@ -104,6 +139,18 @@ typedef enum tam_display_result (*tam_display_access_check)(void *, bool restori
 void tam_display_state_set_access_check(struct tam_display_state *, tam_display_access_check, void *);
 enum tam_display_result tam_display_state_keep(struct tam_display_state *,
     const char *connector, struct tam_display_error *error);
+/* Blank one or more named connectors while preserving at least one active
+ * connected console output. Can be called on a fresh or already-active state. */
+enum tam_display_result tam_display_state_blank(struct tam_display_state *,
+    const char *const *connectors, size_t connector_count,
+    struct tam_display_error *error);
+/* Wake one previously detached connector using owned baseline mode/FB
+ * references while keeping any remaining detached outputs blank. If no
+ * detached outputs remain, performs a full restore. */
+enum tam_display_result tam_display_state_wake(struct tam_display_state *,
+    const char *connector, struct tam_display_error *error);
+bool tam_display_state_is_detached(const struct tam_display_state *,
+    const char *connector);
 /* End the selection, restoring captured outputs still connected on the same
  * device. Disconnected routes are disabled, including otherwise unused shared
  * pipelines. Requires stable object/property identities and owned references;

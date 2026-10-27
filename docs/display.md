@@ -1,8 +1,9 @@
 # Experimental Linux console display control
 
-`tam_display.h` / `libtam-display.a` API 0.3.0 provides DRM inspection,
-connector routing analysis, owned restoration references and atomic
-transactions. `tam_vt.h` verifies the caller's foreground text VT.
+`tam_display.h` / `libtam-display.a` API 0.4.0 provides DRM inspection,
+connector routing analysis, console framebuffer mapping, owned restoration references,
+targeted atomic blank/wake transactions and state queries. `tam_vt.h` verifies the caller's foreground text VT
+and exposes TIOCLINUX blank/wake and console idle control.
 `tam_display_session.h` / `libtam-display-session.a` is a separate optional
 session/seat adapter. The display archive needs only libc; the adapter needs
 libsystemd. Neither uses the portal archive or a libdrm runtime.
@@ -97,11 +98,22 @@ callback with `tam_display_state_set_access_check` and arm independent recovery
 before a real write. Writes without that callback fail. The callback runs
 immediately before every real commit, including restoration.
 
+`tam_display_map_console_fb` inspects `/sys/class/vtconsole`, `/dev/fb*` via
+`FBIOGET_CON2FBMAP`, and `/sys/class/graphics/fb*` to discover the bound `fbcon`
+device, its geometry/stride, and its backing primary DRM card (`cardN`).
+`tam_display_state_verify_console_fb` validates that the mapped geometry and stride
+match the captured active DRM framebuffer reference on the primary card.
+
 `tam_display_state_keep` re-enumerates, builds one complete single-device
 request, tests it with `TEST_ONLY | ALLOW_MODESET`, rechecks the observation,
 and commits synchronously. It only detaches the excluded connectors and
-turns off their otherwise unused CRTCs/planes. Unsupported single-output
-selections do not fall back to whole-console blanking. Writes are never
+turns off their otherwise unused CRTCs/planes. Calling `tam_display_state_keep`
+on an already modified state safely transitions the active output.
+`tam_display_state_blank` detaches a specified list of active connectors while
+preserving remaining routes. `tam_display_state_wake` restores a previously
+detached connector to its captured route in a single atomic transaction.
+`tam_display_state_is_detached` queries whether a connector is currently detached.
+Unsupported selections do not fall back to whole-console blanking. Writes are never
 retried on `EINTR`, which can follow an applied transaction. Restore after
 any uncertain commit; a failed atomic test issues no display commit.
 
@@ -138,11 +150,11 @@ by a userspace timer alone.
 Hotplug ends a trial and the software-tested recovery restores surviving
 captured outputs, including after retained-output loss. Drivers that also
 replace CRTCs/planes, introduce connectors or alter unrelated routing still
-fail closed; physical recovery remains unproved. Multi-GPU compensation,
-per-output wake, persistent `keep --shell`, terminal UI parity,
-actual console framebuffer mapping, resource measurements and physical
-fbcon/VT/desktop handoff remain open. Do not install this prototype into a
-live session outside the recorded package Test route.
+fail closed; physical recovery remains unproved. Actual console framebuffer mapping,
+targeted blanking, per-output wake, persistent `keep --shell`, terminal UI parity
+and resource measurements are implemented and software-tested in 0.5.5.
+Physical multi-monitor hardware trial and physical fbcon/VT/desktop handoff remain open.
+Do not install this prototype into a live session outside the recorded package Test route.
 
 `make test-display test-session` instruments the library objects with
 ASan/UBSan. Fake ioctl tests cover reference ownership/cleanup, shared CRTCs

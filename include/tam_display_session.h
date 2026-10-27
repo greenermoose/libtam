@@ -12,6 +12,9 @@ enum tam_display_session_event {
 };
 enum tam_display_result tam_display_session_open(const struct tam_vt *,
     unsigned card, struct tam_display_session **, struct tam_display_error *);
+enum tam_display_result tam_display_session_open_console(const struct tam_vt *,
+    struct tam_console_fb *fb, struct tam_display_session **,
+    struct tam_display_error *);
 int tam_display_session_device(const struct tam_display_session *);
 /* Process pending messages, verify session and foreground VT before selection.
  * Any handoff ends this selection. Resume descriptors are never adopted. */

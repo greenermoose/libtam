@@ -61,7 +61,14 @@ static enum tam_display_result retain_fb(struct tam_display_state *s, uint32_t i
     }
     fb.fb_id = 0;
     if (tam_display_call(s, DRM_IOCTL_MODE_ADDFB2, &fb) < 0) { rc = ioerror(e, "Cannot retain owned framebuffer"); goto done; }
-    s->fbs[s->fb_count++] = (struct tam_display_ref){id, fb.fb_id};
+    s->fbs[s->fb_count++] = (struct tam_display_ref){
+        .original = id,
+        .owned = fb.fb_id,
+        .width = fb.width,
+        .height = fb.height,
+        .pitch = fb.pitches[0],
+        .handle = fb.handles[0]
+    };
     *owned = fb.fb_id;
 done:
     close_handles(s, &fb);
@@ -90,7 +97,7 @@ static enum tam_display_result retain_blob(struct tam_display_state *s, uint32_t
         struct drm_mode_create_blob c = {.data = (uintptr_t)bytes, .length = length};
         if (tam_display_call(s, DRM_IOCTL_MODE_CREATEPROPBLOB, &c) < 0) rc = ioerror(e, "Cannot own restoration blob");
         else {
-            s->blobs[s->blob_count++] = (struct tam_display_ref){id, c.blob_id};
+            s->blobs[s->blob_count++] = (struct tam_display_ref){.original = id, .owned = c.blob_id};
             s->blob_bytes += length;
             *owned = c.blob_id;
         }

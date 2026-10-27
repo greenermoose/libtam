@@ -220,15 +220,20 @@ void tam_display_state_set_access_check(struct tam_display_state *s, tam_display
     if (s) { s->access_check = check; s->access_context = context; }
 }
 
+static enum tam_display_result apply_plan_from_restore(struct tam_display_state *s,
+    const struct tam_display_plan *plan, uint32_t must_connect_id,
+    struct tam_display_error *e);
+
 enum tam_display_result tam_display_state_keep(struct tam_display_state *s,
     const char *connector, struct tam_display_error *e)
 {
     if (e) *e = (struct tam_display_error){0};
-    if (!s || s->changed) return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "A fresh owned display state is required");
+    if (!s || !s->baseline) return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "A valid owned display state is required");
     struct tam_display_plan plan;
     enum tam_display_result rc = tam_display_plan_keep(s->baseline, connector, &plan, e);
     if (rc) return rc;
     if (!plan.detach_count) return tam_display_fail(e, TAM_DISPLAY_UNSUPPORTED, 0, "No other active output to blank");
+    if (s->changed) return apply_plan_from_restore(s, &plan, plan.keep_connector, e);
     s->change.count = 0;
     for (size_t i = 0; i < s->baseline->connector_count; ++i) {
         const struct tam_display_connector *c = &s->baseline->connectors[i];
@@ -256,7 +261,42 @@ enum tam_display_result tam_display_state_keep(struct tam_display_state *s,
     rc = tam_display_validate(s, false, e); if (rc) return rc;
     s->changed = true; /* Even EINTR is an uncertain write requiring recovery. */
     s->restoring = false;
+    s->detached_count = plan.detach_count;
+    memcpy(s->detached, plan.detach, plan.detach_count * sizeof(uint32_t));
     return tam_display_atomic(s, &s->change, false, e);
+}
+
+enum tam_display_result tam_display_state_verify_console_fb(
+    struct tam_display_state *s, struct tam_console_fb *fb,
+    struct tam_display_error *e)
+{
+    if (e) *e = (struct tam_display_error){0};
+    if (!s || !s->baseline || !fb)
+        return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Invalid state or console framebuffer mapping");
+    enum tam_display_result rc = tam_display_verify_console_fb(s->baseline, fb, e);
+    if (rc) return rc;
+    const struct tam_display_ref *matched = NULL;
+    for (size_t i = 0; i < s->fb_count; ++i)
+        if (s->fbs[i].original == fb->drm_fb_id) { matched = &s->fbs[i]; break; }
+    if (!matched || !matched->width || !matched->height || !matched->pitch)
+        return tam_display_fail(e, TAM_DISPLAY_STALE, 0, "Console framebuffer reference was not captured");
+    if (matched->width != fb->width || matched->height != fb->height || matched->pitch != fb->stride)
+        return tam_display_fail(e, TAM_DISPLAY_UNSUPPORTED, 0,
+            "Captured DRM framebuffer geometry does not match the bound fbcon device");
+    s->console_fb_id = fb->drm_fb_id;
+    return TAM_DISPLAY_OK;
+}
+
+bool tam_display_state_is_detached(const struct tam_display_state *s, const char *connector)
+{
+    if (!s || !s->baseline || !s->changed || !connector || !*connector) return false;
+    for (size_t i = 0; i < s->baseline->connector_count; ++i) {
+        const struct tam_display_connector *c = &s->baseline->connectors[i];
+        if (!tam_display_connector_matches(c->name, connector)) continue;
+        for (size_t j = 0; j < s->detached_count; ++j)
+            if (s->detached[j] == c->object.id) return true;
+    }
+    return false;
 }
 
 /* Patch a captured assignment without introducing a second assignment to the
@@ -337,7 +377,158 @@ enum tam_display_result tam_display_state_restore(struct tam_display_state *s,
         return TAM_DISPLAY_RESTORE_FAILED;
     }
     s->changed = false;
+    s->detached_count = 0;
     /* A restored state uses new owned IDs. Do not reuse its old observation. */
     s->change.count = 0;
     return TAM_DISPLAY_OK;
+}
+
+static enum tam_display_result apply_plan_from_restore(struct tam_display_state *s,
+    const struct tam_display_plan *plan, uint32_t must_connect_id,
+    struct tam_display_error *e)
+{
+    struct tam_display_topology *tested = NULL, *now = NULL;
+    struct tam_display_request *request = malloc(sizeof(*request));
+    enum tam_display_result rc = request ? observe(s, true, &tested, e) :
+        tam_display_fail(e, TAM_DISPLAY_IO, ENOMEM, "Cannot allocate display request");
+    if (!rc && must_connect_id) {
+        const struct tam_display_connector *c = find_connector(tested, must_connect_id);
+        if (!c || c->connection != 1)
+            rc = tam_display_fail(e, TAM_DISPLAY_UNSUPPORTED, 0, "Selected connector is disconnected");
+    }
+    if (!rc) rc = recovery_request(s, tested, request, e);
+    if (!rc) {
+        const struct tam_display_topology *old = s->baseline;
+        for (size_t i = 0; i < old->connector_count; ++i)
+            for (size_t j = 0; j < plan->detach_count; ++j)
+                if (old->connectors[i].object.id == plan->detach[j])
+                    replace(request, &old->connectors[i].object, "CRTC_ID", 0);
+        for (size_t i = 0; i < old->crtc_count; ++i)
+            for (size_t j = 0; j < plan->disable_crtc_count; ++j)
+                if (old->crtcs[i].object.id == plan->disable_crtcs[j]) {
+                    replace(request, &old->crtcs[i].object, "ACTIVE", 0);
+                    replace(request, &old->crtcs[i].object, "MODE_ID", 0);
+                }
+        for (size_t i = 0; i < old->plane_count; ++i)
+            for (size_t j = 0; j < plan->disable_plane_count; ++j)
+                if (old->planes[i].object.id == plan->disable_planes[j]) {
+                    replace(request, &old->planes[i].object, "CRTC_ID", 0);
+                    replace(request, &old->planes[i].object, "FB_ID", 0);
+                }
+        rc = tam_display_atomic(s, request, true, e);
+    }
+    if (!rc) rc = tam_display_inspect_with(s->fd, &now, e, s->call, s->context);
+    if (!rc && !same_topology(s, tested, now, false))
+        rc = tam_display_fail(e, TAM_DISPLAY_STALE, 0, "Display changed during transaction validation");
+    if (!rc) {
+        s->changed = true;
+        s->restoring = false;
+        rc = tam_display_atomic(s, request, false, e);
+        if (!rc) {
+            s->change = *request;
+            s->detached_count = plan->detach_count;
+            memcpy(s->detached, plan->detach, plan->detach_count * sizeof(uint32_t));
+        }
+    }
+    free(now); free(tested); free(request);
+    return rc;
+}
+
+enum tam_display_result tam_display_state_blank(struct tam_display_state *s,
+    const char *const *connectors, size_t connector_count,
+    struct tam_display_error *e)
+{
+    if (e) *e = (struct tam_display_error){0};
+    if (!s || !s->baseline || !connectors || !connector_count || connector_count > TAM_DISPLAY_MAX_OBJECTS)
+        return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Invalid state or blank connector selection");
+    struct tam_display_plan plan;
+    enum tam_display_result rc;
+    if (!s->changed) {
+        rc = tam_display_plan_blank(s->baseline, connectors, connector_count, &plan, e);
+        if (rc) return rc;
+        s->change.count = 0;
+        for (size_t i = 0; i < s->baseline->connector_count; ++i) {
+            const struct tam_display_connector *c = &s->baseline->connectors[i];
+            for (size_t j = 0; j < plan.detach_count; ++j) if (c->object.id == plan.detach[j]) {
+                rc = set(&s->change, &c->object, "CRTC_ID", 0, e); if (rc) return rc;
+            }
+        }
+        for (size_t i = 0; i < s->baseline->crtc_count; ++i) {
+            const struct tam_display_crtc *c = &s->baseline->crtcs[i];
+            for (size_t j = 0; j < plan.disable_crtc_count; ++j) if (c->object.id == plan.disable_crtcs[j]) {
+                rc = set(&s->change, &c->object, "ACTIVE", 0, e); if (rc) return rc;
+                rc = set(&s->change, &c->object, "MODE_ID", 0, e); if (rc) return rc;
+            }
+        }
+        for (size_t i = 0; i < s->baseline->plane_count; ++i) {
+            const struct tam_display_plane *p = &s->baseline->planes[i];
+            for (size_t j = 0; j < plan.disable_plane_count; ++j) if (p->object.id == plan.disable_planes[j]) {
+                rc = set(&s->change, &p->object, "CRTC_ID", 0, e); if (rc) return rc;
+                rc = set(&s->change, &p->object, "FB_ID", 0, e); if (rc) return rc;
+            }
+        }
+        rc = tam_display_validate(s, false, e); if (rc) return rc;
+        rc = tam_display_atomic(s, &s->change, true, e); if (rc) return rc;
+        rc = tam_display_validate(s, false, e); if (rc) return rc;
+        s->changed = true;
+        s->restoring = false;
+        s->detached_count = plan.detach_count;
+        memcpy(s->detached, plan.detach, plan.detach_count * sizeof(uint32_t));
+        return tam_display_atomic(s, &s->change, false, e);
+    }
+    struct tam_display_plan requested;
+    rc = tam_display_plan_blank(s->baseline, connectors, connector_count, &requested, e);
+    if (rc) return rc;
+    const char *combined[TAM_DISPLAY_MAX_OBJECTS];
+    size_t combined_count = 0;
+    for (size_t i = 0; i < s->baseline->connector_count; ++i) {
+        uint32_t id = s->baseline->connectors[i].object.id;
+        bool want = false;
+        for (size_t j = 0; j < s->detached_count; ++j)
+            if (s->detached[j] == id) want = true;
+        for (size_t j = 0; j < requested.detach_count; ++j)
+            if (requested.detach[j] == id) want = true;
+        if (want) combined[combined_count++] = s->baseline->connectors[i].name;
+    }
+    rc = tam_display_plan_blank(s->baseline, combined, combined_count, &plan, e);
+    if (rc) return rc;
+    return apply_plan_from_restore(s, &plan, 0, e);
+}
+
+enum tam_display_result tam_display_state_wake(struct tam_display_state *s,
+    const char *connector, struct tam_display_error *e)
+{
+    if (e) *e = (struct tam_display_error){0};
+    if (!s || !s->baseline || !connector || !*connector)
+        return tam_display_fail(e, TAM_DISPLAY_INVALID, 0, "Invalid state or connector to wake");
+    const struct tam_display_connector *target = NULL;
+    for (size_t i = 0; i < s->baseline->connector_count; ++i) {
+        const struct tam_display_connector *c = &s->baseline->connectors[i];
+        if (tam_display_connector_matches(c->name, connector)) {
+            if (target) return tam_display_fail(e, TAM_DISPLAY_AMBIGUOUS, 0, "Connector name is ambiguous");
+            target = c;
+        }
+    }
+    if (!target) return tam_display_fail(e, TAM_DISPLAY_NOT_FOUND, 0, "Selected connector not found");
+    if (target->connection != 1 || !target->crtc_id)
+        return tam_display_fail(e, TAM_DISPLAY_UNSUPPORTED, 0, "Selected connector has no active console route");
+    if (!s->changed) return TAM_DISPLAY_OK;
+    bool was_detached = false;
+    const char *remaining[TAM_DISPLAY_MAX_OBJECTS];
+    size_t remaining_count = 0;
+    for (size_t i = 0; i < s->baseline->connector_count; ++i) {
+        const struct tam_display_connector *c = &s->baseline->connectors[i];
+        bool in_detached = false;
+        for (size_t j = 0; j < s->detached_count; ++j)
+            if (s->detached[j] == c->object.id) in_detached = true;
+        if (!in_detached) continue;
+        if (c->object.id == target->object.id) was_detached = true;
+        else remaining[remaining_count++] = c->name;
+    }
+    if (!was_detached) return TAM_DISPLAY_OK;
+    if (!remaining_count) return tam_display_state_restore(s, e);
+    struct tam_display_plan plan;
+    enum tam_display_result rc = tam_display_plan_blank(s->baseline, remaining, remaining_count, &plan, e);
+    if (rc) return rc;
+    return apply_plan_from_restore(s, &plan, target->object.id, e);
 }

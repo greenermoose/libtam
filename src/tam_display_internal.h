@@ -14,7 +14,10 @@ enum tam_display_result tam_display_fail(struct tam_display_error *,
 #define TAM_DISPLAY_MAX_REFS 256
 struct tam_display_write { uint32_t object, property; uint64_t value; };
 struct tam_display_request { size_t count; struct tam_display_write writes[TAM_DISPLAY_MAX_WRITES]; };
-struct tam_display_ref { uint32_t original, owned; };
+struct tam_display_ref {
+    uint32_t original, owned;
+    uint32_t width, height, pitch, handle;
+};
 struct tam_display_state {
     int fd;
     tam_display_ioctl_fn call;
@@ -23,6 +26,9 @@ struct tam_display_state {
     struct tam_display_request restore, change;
     struct tam_display_ref fbs[TAM_DISPLAY_MAX_REFS], blobs[TAM_DISPLAY_MAX_REFS];
     size_t fb_count, blob_count, blob_bytes;
+    uint32_t detached[TAM_DISPLAY_MAX_OBJECTS];
+    size_t detached_count;
+    uint32_t console_fb_id;
     bool changed, close_fd, restoring;
     tam_display_access_check access_check;
     void *access_context;
@@ -36,4 +42,9 @@ enum tam_display_result tam_display_validate(struct tam_display_state *,
     bool recovery, struct tam_display_error *);
 enum tam_display_result tam_display_append(struct tam_display_request *, uint32_t,
     uint32_t, uint64_t, struct tam_display_error *);
+bool tam_display_connector_matches(const char *connector_name, const char *query);
+enum tam_display_result tam_display_map_console_fb_with(unsigned vt_number,
+    const char *sysfs_root, const char *dev_root,
+    struct tam_console_fb *out, struct tam_display_error *error,
+    tam_display_ioctl_fn call, void *context);
 #endif

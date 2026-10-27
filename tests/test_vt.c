@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 static unsigned number = 2, active = 2, owner_bad, graphic, background, closes;
-static int failure, acknowledgements;
+static int failure, acknowledgements, blanks, wakes;
 static struct vt_mode vt_mode = {.mode = VT_AUTO};
 int __wrap_open(const char *path, int flags, ...)
 {
@@ -43,6 +43,13 @@ int __wrap_ioctl(int fd, unsigned long op, ...)
     else if (op == TIOCGDEV) { assert(fd == 40); *(unsigned *)arg = makedev(number == 2 ? 4 : 136, number); }
     else if (op == VT_GETSTATE) { assert(fd == 50); ((struct vt_stat *)arg)->v_active = active; }
     else if (op == KDGETMODE) { assert(fd == 50); *(int *)arg = graphic ? KD_GRAPHICS : KD_TEXT; }
+    else if (op == TIOCLINUX) {
+        assert(fd == 50);
+        unsigned char sub = *(unsigned char *)arg;
+        if (sub == 14) ++blanks;
+        else if (sub == 4) ++wakes;
+        else assert(!"Unexpected TIOCLINUX subcode");
+    }
     else assert(!"VT mutation is forbidden");
     return 0;
 }
@@ -60,7 +67,12 @@ int main(void)
     assert(tam_vt_claim(&v, &e) == TAM_DISPLAY_OK && v.claimed && vt_mode.mode == VT_PROCESS);
     assert(vt_mode.relsig == SIGUSR1 && vt_mode.acqsig == SIGUSR2);
     assert(tam_vt_check(&v, &e) == TAM_DISPLAY_OK);
-    background = 1; assert(tam_vt_check_restore(&v, &e) == TAM_DISPLAY_OK); background = 0;
+    assert(tam_vt_blank(&v, &e) == TAM_DISPLAY_OK && blanks == 1);
+    assert(tam_vt_wake(&v, &e) == TAM_DISPLAY_OK && wakes == 1);
+    background = 1; assert(tam_vt_check_restore(&v, &e) == TAM_DISPLAY_OK);
+    assert(tam_vt_blank(&v, &e) == TAM_DISPLAY_INACTIVE && blanks == 1);
+    assert(tam_vt_wake(&v, &e) == TAM_DISPLAY_OK && wakes == 2);
+    background = 0;
     assert(tam_vt_release(&v, true, &e) == TAM_DISPLAY_OK && !v.claimed && acknowledgements == 1 && vt_mode.mode == VT_AUTO);
     vt_mode.mode = VT_PROCESS;
     assert(tam_vt_claim(&v, &e) == TAM_DISPLAY_BUSY && !v.claimed);

@@ -7,7 +7,9 @@
 DBUS_CFLAGS ?= $(shell pkg-config --cflags dbus-1)
 
 CFLAGS ?= -O2 -Wall -Wextra -Wpedantic
-override CFLAGS += -g -fPIC -Iinclude
+# Debug information names source files relative to the source tree, not
+# the directory it was built in, so builds in different places are identical.
+override CFLAGS += -g -fPIC -Iinclude -ffile-prefix-map=$(CURDIR)=.
 PREFIX ?= /usr/local
 PKGCONFIGDIR ?= $(PREFIX)/lib/pkgconfig
 VERSION := $(shell sed -n 's/^\#define TAM_VERSION_STRING "\(.*\)"$$/\1/p' include/tam.h)

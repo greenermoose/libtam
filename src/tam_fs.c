@@ -39,8 +39,29 @@ char *tam_fs_read_file(const char *path, size_t *out_len) {
     return buf;
 }
 
+/* The directory part of `path` ("." when it has none). Caller frees. */
+static char *parent_of(const char *path) {
+    const char *slash = strrchr(path, '/');
+    if (!slash) return strdup(".");
+    if (slash == path) return strdup("/");
+    return strndup(path, (size_t)(slash - path));
+}
+
+bool tam_fs_sync_dirat(int dirfd, const char *name) {
+    int fd = openat(dirfd, name ? name : ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return false;
+    bool ok = fsync(fd) == 0;
+    close(fd);
+    return ok;
+}
+
+bool tam_fs_sync_dir(const char *path) {
+    if (!path) return false;
+    return tam_fs_sync_dirat(AT_FDCWD, path);
+}
+
 bool tam_fs_write_atomic(const char *path, const void *data, size_t len, mode_t mode) {
-    if (!path || !data) return false;
+    if (!path || (!data && len > 0)) return false;
 
     char tmp_path[4096];
     int n = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.XXXXXX", path);
@@ -49,32 +70,32 @@ bool tam_fs_write_atomic(const char *path, const void *data, size_t len, mode_t 
     int fd = mkstemp(tmp_path);
     if (fd < 0) return false;
 
-    if (mode) {
-        fchmod(fd, mode);
-    }
-
+    bool ok = !mode || fchmod(fd, mode) == 0;
     const char *p = (const char *)data;
     size_t rem = len;
-    while (rem > 0) {
+    while (ok && rem > 0) {
         ssize_t written = write(fd, p, rem);
-        if (written <= 0) {
-            close(fd);
-            unlink(tmp_path);
-            return false;
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) ok = false;
+        else {
+            rem -= (size_t)written;
+            p += written;
         }
-        rem -= (size_t)written;
-        p += written;
     }
-
-    fsync(fd);
-    close(fd);
-
-    if (rename(tmp_path, path) != 0) {
+    ok = ok && fsync(fd) == 0;
+    ok = close(fd) == 0 && ok;
+    ok = ok && rename(tmp_path, path) == 0;
+    if (!ok) {
+        int saved = errno;
         unlink(tmp_path);
+        errno = saved;
         return false;
     }
 
-    return true;
+    char *dir = parent_of(path);
+    ok = dir && tam_fs_sync_dir(dir);
+    free(dir);
+    return ok;
 }
 
 bool tam_fs_mkdir_p(const char *path, mode_t mode) {

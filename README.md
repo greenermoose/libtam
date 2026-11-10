@@ -16,8 +16,11 @@ Tamlinux packages and utilities must be fast, rock-solid, and free of bloat. Rat
 | :--- | :--- | :--- |
 | **`tam_str`** | `tam_str_*` | Safe dynamic string manipulation with auto-growth, format appending (`tam_str_cat_printf`), trimming, and JSON string escaping (`tam_str_cat_json`). |
 | **`tam_exec`** | `tam_exec`, `tam_exec_opts` | Subprocess execution without a shell: a wall-clock deadline, standard input from `/dev/null` or supplied bytes, an output cap, stdout/stderr capture, and the whole process group killed on timeout. |
-| **`tam_fs`** | `tam_fs_*` | Safe filesystem primitives, whole-file reading, atomic writes via temporary file and rename (`tam_fs_write_atomic`), and `mkdir -p` (`tam_fs_mkdir_p`). |
-| **`tam_path`** | `tam_path_*`, `tam_xdg_path` | Path joining, joining under a root that refuses `..` and absolute paths, and per-command XDG state, cache, data, config and runtime paths (`<base>/tamlinux/<command>/`). |
+| **`tam_fs`** | `tam_fs_*` | Safe filesystem primitives, whole-file reading, atomic writes that sync the file and its directory (`tam_fs_write_atomic`), directory sync, and `mkdir -p` (`tam_fs_mkdir_p`). |
+| **`tam_fs_tree`** | `tam_fs_exchange`, `tam_fs_clone_or_copy`, `tam_fs_remove_tree`, `tam_fs_lock`, `tam_fs_walk` | Whole-tree operations: swap two directories in one step, clone a file where the filesystem shares extents (else copy), remove a tree without following links or crossing filesystems, an exclusive lock with a timeout, and a sorted walk that never follows links. |
+| **`tam_sha256`** | `tam_sha256_*` | SHA-256 (FIPS 180-4): incremental, whole file, and hex. |
+| **`tam_rec`** | `tam_rec_parse`, `tam_rec_cat` | Line record files: one record per line, a leading `format N` line, a strict reader that refuses truncated or malformed files, and a writer that refuses fields it could not read back. |
+| **`tam_path`** | `tam_path_*`, `tam_xdg_path` | Path joining, joining under a root that refuses `..` and absolute paths, a check for safe relative paths inside a tree (`tam_path_is_safe_rel`), and per-command XDG state, cache, data, config and runtime paths (`<base>/tamlinux/<command>/`). |
 | **`tam_ini`** | `tam_ini_*` | Lightweight INI and key-value file parser for user configuration and desktop state. |
 | **`tam_term`** | `tam_log_*` | Colorized terminal logging and terminal escape sequence utilities. |
 | **`tam_portal`** | `tam_portal_*` in `<tam_portal.h>` | Native desktop portal integration (FileChooser via D-Bus session bus). A separate library, `libtam-portal`. |

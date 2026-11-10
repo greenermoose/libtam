@@ -71,3 +71,22 @@ char *tam_xdg_path(tam_xdg_kind_t kind, const char *command, const char *leaf,
     free(dir);
     return path;
 }
+
+bool tam_path_is_safe_rel(const char *rel) {
+    if (!rel || rel[0] == '\0' || rel[0] == '/') return false;
+    const char *p = rel;
+    for (;;) {
+        const char *start = p;
+        while (*p != '/' && *p != '\0') {
+            unsigned char c = (unsigned char)*p;
+            if (c < 0x20 || c == 0x7f) return false;
+            p++;
+        }
+        size_t n = (size_t)(p - start);
+        if (n == 0) return false;                       /* "//" or trailing "/" */
+        if (n == 1 && start[0] == '.') return false;
+        if (n == 2 && start[0] == '.' && start[1] == '.') return false;
+        if (*p == '\0') return true;
+        p++;
+    }
+}

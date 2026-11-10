@@ -8,12 +8,14 @@ not reconstruct authorship for earlier commits. Transcripts remain private.
 | --- | --- | --- | --- |
 | Codex CLI | 0.164.0 | gpt-6.1-sol | 2026-10-25 |
 | Google Antigravity | 2.0 | Gemini 3.8 Flash | 2026-10-26 |
+| Claude Code | 2.1.321 | claude-opus-5-5 | 2026-11-09 |
 
 | Date | Milestone | Record |
 | --- | --- | --- |
 | 2026-10-25 | Optional DRM inspection/routing analysis; core/display build separation | [Session](docs/ai/2026-10-25-monitor-feasibility.md) |
 | 2026-10-25 | Foreground VT/seat access, owned restoration and guarded atomic transactions | [Session](docs/ai/2026-10-25-monitor-ownership.md) |
 | 2026-10-26 | Console framebuffer mapping, targeted atomic blank/wake and VT console control | [Session](docs/ai/2026-10-26-console-fb-and-wake.md) |
+| 2026-11-09 | 0.5.0: SHA-256, sorted walk, line records and tree operations for `tam-bundle` | [Session](docs/ai/2026-11-09-file-bundle-primitives.md) |
 
 2026-10-25: Codex CLI `0.164.0` (`gpt-6.1-sol`) implements validated recovery
 of surviving captured console outputs after retained-output disconnect/removal.

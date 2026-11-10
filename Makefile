@@ -18,12 +18,17 @@ SRCS = src/tam_version.c \
        src/tam_exec.c \
        src/tam_fs.c \
        src/tam_path.c \
-       src/tam_ini.c
+       src/tam_ini.c \
+       src/tam_sha256.c \
+       src/tam_walk.c \
+       src/tam_rec.c \
+       src/tam_fs_tree.c
 
 OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
 CORE_LIB = build/libtam.a
 PORTAL_LIB = build/libtam-portal.a
 TEST_BIN = build/test_tam
+FILES_TEST_BIN = build/test_tam_files
 PORTAL_TEST_BIN = build/test_tam_portal
 DISPLAY_SRCS = src/tam_display_discovery.c src/tam_display_kms.c src/tam_display_plan.c src/tam_display_fbcon.c src/tam_vt.c src/tam_display_access.c src/tam_display_restore.c src/tam_display_atomic.c
 DISPLAY_OBJS = $(patsubst src/%.c,build/display/%.o,$(DISPLAY_SRCS))
@@ -109,12 +114,18 @@ $(PORTAL_LIB): build/tam_portal.o
 $(TEST_BIN): tests/test_tam.c include/tam.h $(CORE_LIB)
 	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_tam.c $(CORE_LIB) -o $@
 
+$(FILES_TEST_BIN): tests/test_tam_files.c include/tam.h $(CORE_LIB)
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_tam_files.c $(CORE_LIB) -o $@
+
 $(PORTAL_TEST_BIN): tests/test_tam_portal.c include/tam_portal.h $(PORTAL_LIB) $(CORE_LIB)
 	$(CC) $(CFLAGS) $(DBUS_CFLAGS) -fsanitize=address,undefined tests/test_tam_portal.c \
 		$(PORTAL_LIB) $(CORE_LIB) -o $@ $(shell pkg-config --libs dbus-1)
 
-test: $(TEST_BIN) $(PORTAL_TEST_BIN)
+# test_tam_files works in $TAM_TEST_DIR (default $TMPDIR, else /tmp); point it
+# at Btrfs and ext4 directories to cover both file systems.
+test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN)
 	./$(TEST_BIN)
+	./$(FILES_TEST_BIN)
 	./$(PORTAL_TEST_BIN)
 
 clean:

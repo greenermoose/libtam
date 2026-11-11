@@ -122,3 +122,5 @@ int main(void) {
 ## License
 
 GNU General Public License v3.0 (GPLv3). See [`LICENSE`](LICENSE) for details.
+
+[Software defect tracker](bugs/README-bugs.md): report reproducible defects beside their source.

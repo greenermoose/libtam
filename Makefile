@@ -24,7 +24,8 @@ SRCS = src/tam_version.c \
        src/tam_sha256.c \
        src/tam_walk.c \
        src/tam_rec.c \
-       src/tam_fs_tree.c
+       src/tam_fs_tree.c \
+       src/tam_bundle.c
 
 OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
 CORE_LIB = build/libtam.a
@@ -32,6 +33,7 @@ PORTAL_LIB = build/libtam-portal.a
 TEST_BIN = build/test_tam
 FILES_TEST_BIN = build/test_tam_files
 PORTAL_TEST_BIN = build/test_tam_portal
+BUNDLE_TEST_BIN = build/test_tam_bundle
 DISPLAY_SRCS = src/tam_display_discovery.c src/tam_display_kms.c src/tam_display_plan.c src/tam_display_fbcon.c src/tam_vt.c src/tam_display_access.c src/tam_display_restore.c src/tam_display_atomic.c
 DISPLAY_OBJS = $(patsubst src/%.c,build/display/%.o,$(DISPLAY_SRCS))
 SESSION_CFLAGS ?= $(shell pkg-config --cflags libsystemd)
@@ -125,10 +127,14 @@ $(PORTAL_TEST_BIN): tests/test_tam_portal.c include/tam_portal.h $(PORTAL_LIB) $
 
 # test_tam_files works in $TAM_TEST_DIR (default $TMPDIR, else /tmp); point it
 # at Btrfs and ext4 directories to cover both file systems.
-test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN)
+$(BUNDLE_TEST_BIN): tests/test_bundle.c src/tam_bundle.c src/tam_rec.c src/tam_str.c include/tam.h | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_bundle.c src/tam_bundle.c src/tam_rec.c src/tam_str.c -o $@
+
+test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(BUNDLE_TEST_BIN)
 	./$(TEST_BIN)
 	./$(FILES_TEST_BIN)
 	./$(PORTAL_TEST_BIN)
+	./$(BUNDLE_TEST_BIN)
 
 clean:
 	rm -rf build

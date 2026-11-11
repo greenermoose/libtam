@@ -25,11 +25,17 @@ extern "C" {
 /* ========================================================================= */
 
 #define TAM_VERSION_MAJOR 0
-#define TAM_VERSION_MINOR 5
+#define TAM_VERSION_MINOR 6
 #define TAM_VERSION_PATCH 0
-#define TAM_VERSION_STRING "0.5.1"
+#define TAM_VERSION_STRING "0.6.0"
 
 const char *tam_version(void);
+
+/* Read-only startup barrier. NULL selects the root-owned system transaction.
+ * An explicit path supports an alternate root or a private test fixture.
+ * Returns 0 when absent, staging, ready or complete; -1 for an incomplete,
+ * malformed, untrusted or unreadable record. No action or recovery is run. */
+int tam_bundle_guard(const char *transaction_path);
 
 /* ========================================================================= */
 /* Logging & Terminal Colors (tam_term)                                      */

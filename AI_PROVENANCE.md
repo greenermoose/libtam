@@ -1,5 +1,7 @@
 # AI collaboration and provenance
 
+2026-11-11: Codex CLI `0.167.0` (`gpt-6.1-sol`) adds the shared bundle startup guard in libtam 0.6.0. [Record](docs/ai/2026-11-11-bundle-startup-guard.md).
+
 This repository follows the [Tamlinux AI provenance standard](https://github.com/greenermoose/tamlinux/blob/main/docs/ai-provenance-standard.md).
 Records describe AI-assisted changes from their introduction onward; they do
 not reconstruct authorship for earlier commits. Transcripts remain private.

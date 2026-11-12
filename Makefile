@@ -25,7 +25,10 @@ SRCS = src/tam_version.c \
        src/tam_walk.c \
        src/tam_rec.c \
        src/tam_fs_tree.c \
-       src/tam_bundle.c
+       src/tam_bundle.c \
+       src/tam_uni.c \
+       src/tam_key.c \
+       src/tam_tty.c
 
 OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
 CORE_LIB = build/libtam.a
@@ -34,6 +37,7 @@ TEST_BIN = build/test_tam
 FILES_TEST_BIN = build/test_tam_files
 PORTAL_TEST_BIN = build/test_tam_portal
 BUNDLE_TEST_BIN = build/test_tam_bundle
+TERMINAL_TEST_BIN = build/test_tam_terminal
 DISPLAY_SRCS = src/tam_display_discovery.c src/tam_display_kms.c src/tam_display_plan.c src/tam_display_fbcon.c src/tam_vt.c src/tam_display_access.c src/tam_display_restore.c src/tam_display_atomic.c
 DISPLAY_OBJS = $(patsubst src/%.c,build/display/%.o,$(DISPLAY_SRCS))
 SESSION_CFLAGS ?= $(shell pkg-config --cflags libsystemd)
@@ -45,7 +49,7 @@ DISPLAY_LIB = build/libtam-display.a
 DISPLAY_SAN_OBJS = $(patsubst src/%.c,build/display-asan/%.o,$(DISPLAY_SRCS))
 SAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer
 
-.PHONY: all core portal display test test-display clean install install-core install-portal install-display uninstall uninstall-core uninstall-portal uninstall-display FORCE
+.PHONY: all core portal display test test-display test-terminal clean install install-core install-portal install-display uninstall uninstall-core uninstall-portal uninstall-display FORCE
 
 all: $(CORE_LIB) $(PORTAL_LIB)
 core: $(CORE_LIB)
@@ -130,11 +134,18 @@ $(PORTAL_TEST_BIN): tests/test_tam_portal.c include/tam_portal.h $(PORTAL_LIB) $
 $(BUNDLE_TEST_BIN): tests/test_bundle.c src/tam_bundle.c src/tam_rec.c src/tam_str.c include/tam.h | build
 	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_bundle.c src/tam_bundle.c src/tam_rec.c src/tam_str.c -o $@
 
-test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(BUNDLE_TEST_BIN)
+$(TERMINAL_TEST_BIN): tests/test_terminal.c include/tam.h include/tam_uni.h include/tam_key.h include/tam_tty.h src/tam_uni.c src/tam_key.c src/tam_tty.c | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_terminal.c src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_version.c -o $@
+
+test-terminal: $(TERMINAL_TEST_BIN)
+	./$(TERMINAL_TEST_BIN)
+
+test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(BUNDLE_TEST_BIN) $(TERMINAL_TEST_BIN)
 	./$(TEST_BIN)
 	./$(FILES_TEST_BIN)
 	./$(PORTAL_TEST_BIN)
 	./$(BUNDLE_TEST_BIN)
+	./$(TERMINAL_TEST_BIN)
 
 clean:
 	rm -rf build
@@ -145,7 +156,8 @@ install: install-core install-portal
 
 install-core: $(CORE_LIB)
 	install -d $(DESTDIR)$(PREFIX)/include
-	install -m 644 include/tam.h $(DESTDIR)$(PREFIX)/include/
+	install -m 644 include/tam.h include/tam_uni.h include/tam_key.h \
+		include/tam_tty.h $(DESTDIR)$(PREFIX)/include/
 	install -d $(DESTDIR)$(PREFIX)/lib
 	install -m 644 $(CORE_LIB) $(DESTDIR)$(PREFIX)/lib/
 	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so
@@ -181,7 +193,9 @@ install-display: $(DISPLAY_LIB)
 uninstall: uninstall-core uninstall-portal uninstall-display uninstall-session
 
 uninstall-core:
-	rm -f $(DESTDIR)$(PREFIX)/include/tam.h $(DESTDIR)$(PREFIX)/lib/libtam.a
+	rm -f $(DESTDIR)$(PREFIX)/include/tam.h $(DESTDIR)$(PREFIX)/include/tam_uni.h \
+		$(DESTDIR)$(PREFIX)/include/tam_key.h $(DESTDIR)$(PREFIX)/include/tam_tty.h \
+		$(DESTDIR)$(PREFIX)/lib/libtam.a
 	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so
 	rm -f $(DESTDIR)$(PKGCONFIGDIR)/libtam.pc
 

@@ -1,5 +1,7 @@
 # AI collaboration and provenance
 
+2026-11-12: OpenCode `2.2.5` (`big-pickle`) adds the terminal foundation in libtam 0.7.0: `tam_uni`, `tam_key` and `tam_tty`. [Record](docs/ai/2026-11-12-terminal-foundation.md).
+
 2026-11-11: Codex CLI `0.167.1` (`gpt-6.1-sol`) — library defect tracker. [Record](docs/ai/2026-11-11-defect-tracker.md).
 
 2026-11-11: Codex CLI `0.167.0` (`gpt-6.1-sol`) adds the shared bundle startup guard in libtam 0.6.0. [Record](docs/ai/2026-11-11-bundle-startup-guard.md).
@@ -13,6 +15,7 @@ not reconstruct authorship for earlier commits. Transcripts remain private.
 | Codex CLI | 0.164.0 | gpt-6.1-sol | 2026-10-25 |
 | Google Antigravity | 2.0 | Gemini 3.8 Flash | 2026-10-26 |
 | Claude Code | 2.1.321 | claude-opus-5-5 | 2026-11-09 |
+| OpenCode | 2.2.5 | big-pickle | 2026-11-12 |
 
 | Date | Milestone | Record |
 | --- | --- | --- |

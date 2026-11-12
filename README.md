@@ -22,6 +22,9 @@ Tamlinux packages and utilities must be fast, rock-solid, and free of bloat. Rat
 | **`tam_rec`** | `tam_rec_parse`, `tam_rec_cat` | Line record files: one record per line, a leading `format N` line, a strict reader that refuses truncated or malformed files, and a writer that refuses fields it could not read back. |
 | **`tam_path`** | `tam_path_*`, `tam_xdg_path` | Path joining, joining under a root that refuses `..` and absolute paths, a check for safe relative paths inside a tree (`tam_path_is_safe_rel`), and per-command XDG state, cache, data, config and runtime paths (`<base>/tamlinux/<command>/`). |
 | **`tam_ini`** | `tam_ini_*` | Lightweight INI and key-value file parser for user configuration and desktop state. |
+| **`tam_uni`** | `tam_utf8_*`, `tam_uni_*` in `<tam_uni.h>` | UTF-8 decode and encode, terminal display width from `wcwidth`, string width, and truncation to a cell count without splitting a sequence. |
+| **`tam_key`** | `tam_key_*` in `<tam_key.h>` | Byte-stream key decoder for ANSI/xterm terminals: UTF-8 text, control keys, CSI and SS3 sequences, modifiers, split sequences and an escape timeout. |
+| **`tam_tty`** | `tam_tty_*` in `<tam_tty.h>` | Raw mode with guaranteed restore, size and `SIGWINCH` support, alternate screen, cursor, SGR mouse, bracketed paste, and DEC 2026 synchronized frames. ANSI/xterm only; no terminfo. |
 | **`tam_term`** | `tam_log_*` | Colorized terminal logging and terminal escape sequence utilities. |
 | **`tam_portal`** | `tam_portal_*` in `<tam_portal.h>` | Native desktop portal integration (FileChooser via D-Bus session bus). A separate library, `libtam-portal`. |
 

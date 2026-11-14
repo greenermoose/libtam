@@ -1,5 +1,7 @@
 # AI collaboration and provenance
 
+2026-11-13: Codex CLI `0.169.0` (`gpt-6.1-sol`) converts tracked README files to plain text and updates their consumers. [Record](docs/ai/2026-11-13-plain-readmes.md).
+
 2026-11-12: OpenCode `2.2.5` (`big-pickle`) adds the terminal foundation in libtam 0.7.0: `tam_uni`, `tam_key` and `tam_tty`. [Record](docs/ai/2026-11-12-terminal-foundation.md).
 
 2026-11-11: Codex CLI `0.167.1` (`gpt-6.1-sol`) — library defect tracker. [Record](docs/ai/2026-11-11-defect-tracker.md).

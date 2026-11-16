@@ -12,7 +12,17 @@ CFLAGS ?= -O2 -Wall -Wextra -Wpedantic
 override CFLAGS += -g -fPIC -Iinclude -ffile-prefix-map=$(CURDIR)=.
 PREFIX ?= /usr/local
 PKGCONFIGDIR ?= $(PREFIX)/lib/pkgconfig
-VERSION := $(shell sed -n 's/^\#define TAM_VERSION_STRING "\(.*\)"$$/\1/p' include/tam.h)
+VERSION := $(shell tr -d '[:space:]' < VERSION)
+TAM_VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
+TAM_VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
+TAM_VERSION_PATCH := $(shell echo $(VERSION) | cut -d. -f3)
+
+include/tam.h: VERSION
+	@sed -i \
+	  -e 's/^#define TAM_VERSION_MAJOR .*/#define TAM_VERSION_MAJOR $(TAM_VERSION_MAJOR)/' \
+	  -e 's/^#define TAM_VERSION_MINOR .*/#define TAM_VERSION_MINOR $(TAM_VERSION_MINOR)/' \
+	  -e 's/^#define TAM_VERSION_PATCH .*/#define TAM_VERSION_PATCH $(TAM_VERSION_PATCH)/' \
+	  -e 's/^#define TAM_VERSION_STRING .*/#define TAM_VERSION_STRING "$(VERSION)"/' $@
 
 SRCS = src/tam_version.c \
        src/tam_term.c \

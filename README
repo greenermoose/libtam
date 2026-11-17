@@ -141,8 +141,8 @@ Building & Testing
     sudo make install PREFIX=/usr/local
 
     # Or install a development build for your user, and remove it again
-    make install PREFIX=$HOME/.local/dev
-    make uninstall PREFIX=$HOME/.local/dev
+    make install PREFIX=$HOME/.local
+    make uninstall PREFIX=$HOME/.local
 
 make install also writes pkg-config files, libtam.pc and libtam-portal.pc, in
 $(PREFIX)/lib/pkgconfig/. Programs that use libtam, such as tam, find it with
@@ -151,7 +151,7 @@ tam-file-select, use pkg-config libtam-portal, which adds libtam and D-Bus.
 For a prefix outside pkg-config's default search path, add it once in your
 shell profile:
 
-    export PKG_CONFIG_PATH="$HOME/.local/dev/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+    export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 
 Usage Example
 

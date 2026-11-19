@@ -35,7 +35,7 @@ SRCS = src/tam_version.c \
        src/tam_walk.c \
        src/tam_rec.c \
        src/tam_fs_tree.c \
-       src/tam_bundle.c \
+       src/tam_cultivar.c \
        src/tam_uni.c \
        src/tam_key.c \
        src/tam_tty.c
@@ -46,7 +46,7 @@ PORTAL_LIB = build/libtam-portal.a
 TEST_BIN = build/test_tam
 FILES_TEST_BIN = build/test_tam_files
 PORTAL_TEST_BIN = build/test_tam_portal
-BUNDLE_TEST_BIN = build/test_tam_bundle
+CULTIVAR_TEST_BIN = build/test_tam_cultivar
 TERMINAL_TEST_BIN = build/test_tam_terminal
 DISPLAY_SRCS = src/tam_display_discovery.c src/tam_display_kms.c src/tam_display_plan.c src/tam_display_fbcon.c src/tam_vt.c src/tam_display_access.c src/tam_display_restore.c src/tam_display_atomic.c
 DISPLAY_OBJS = $(patsubst src/%.c,build/display/%.o,$(DISPLAY_SRCS))
@@ -139,10 +139,8 @@ $(PORTAL_TEST_BIN): tests/test_tam_portal.c include/tam_portal.h $(PORTAL_LIB) $
 	$(CC) $(CFLAGS) $(DBUS_CFLAGS) -fsanitize=address,undefined tests/test_tam_portal.c \
 		$(PORTAL_LIB) $(CORE_LIB) -o $@ $(shell pkg-config --libs dbus-1)
 
-# test_tam_files works in $TAM_TEST_DIR (default $TMPDIR, else /tmp); point it
-# at Btrfs and ext4 directories to cover both file systems.
-$(BUNDLE_TEST_BIN): tests/test_bundle.c src/tam_bundle.c src/tam_rec.c src/tam_str.c include/tam.h | build
-	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_bundle.c src/tam_bundle.c src/tam_rec.c src/tam_str.c -o $@
+$(CULTIVAR_TEST_BIN): tests/test_cultivar.c src/tam_cultivar.c include/tam.h | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_cultivar.c src/tam_cultivar.c -o $@
 
 $(TERMINAL_TEST_BIN): tests/test_terminal.c include/tam.h include/tam_uni.h include/tam_key.h include/tam_tty.h src/tam_uni.c src/tam_key.c src/tam_tty.c | build
 	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_terminal.c src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_version.c -o $@
@@ -150,11 +148,11 @@ $(TERMINAL_TEST_BIN): tests/test_terminal.c include/tam.h include/tam_uni.h incl
 test-terminal: $(TERMINAL_TEST_BIN)
 	./$(TERMINAL_TEST_BIN)
 
-test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(BUNDLE_TEST_BIN) $(TERMINAL_TEST_BIN)
+test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(CULTIVAR_TEST_BIN) $(TERMINAL_TEST_BIN)
 	./$(TEST_BIN)
 	./$(FILES_TEST_BIN)
 	./$(PORTAL_TEST_BIN)
-	./$(BUNDLE_TEST_BIN)
+	./$(CULTIVAR_TEST_BIN)
 	./$(TERMINAL_TEST_BIN)
 
 clean:

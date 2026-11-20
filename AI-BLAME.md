@@ -3,8 +3,7 @@
 This file says how libtam records which AI did what: which harness and
 model did each piece of work, what it was asked, and which commits came
 of it. The repository follows the
-[Tamlinux AI provenance standard](https://github.com/greenermoose/tamlinux/blob/main/docs/ai-provenance-standard.md);
-"blame" is our newer word for the same thing.
+[Tamlinux AI blame standard](https://github.com/greenermoose/tamlinux/blob/main/work/ai-blame-standard.md).
 
 Work is handed from session to session in `work/`, as `work/README-work`
 describes:

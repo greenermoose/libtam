@@ -3,13 +3,15 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-17, with W1
+Updated: 2026-11-20, with W2
 
 
 STATE
 
-  Version 0.7.1 on branch develop (the VERSION file is the version's
-  source of truth). Two static archives by default: libtam.a, the core,
+  Version 0.7.1 on branch dev (the VERSION file is the version's
+  source of truth). The working branch was renamed from develop on
+  2026-11-20 under D272; the VERSION file and pins are unchanged.
+  Two static archives by default: libtam.a, the core,
   which needs only libc, and libtam-portal.a, which needs D-Bus. The
   optional libtam-display.a and libtam-display-session.a are
   experimental.

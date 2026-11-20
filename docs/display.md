@@ -11,7 +11,7 @@ libsystemd. Neither uses the portal archive or a libdrm runtime.
 This is a software-tested feasibility implementation. It has not established
 sustained fbcon rendering, physical monitor blanking/standby or reliable
 hardware fallback after process/device loss. The approved
-[console monitor plan](https://github.com/greenermoose/tamlinux/blob/develop/docs/plans/console-monitor-control.md)
+[console monitor plan](https://github.com/greenermoose/tamlinux/blob/dev/docs/plans/console-monitor-control.md)
 keeps those acceptance gates open.
 
 ## Build and development package

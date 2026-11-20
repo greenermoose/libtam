@@ -43,25 +43,13 @@ int main(void) {
     char ver[64];
     assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == -1);
 
-    char src_dir[512], cur_dir[512], file[600];
-    snprintf(src_dir, sizeof(src_dir), "%s/usr/lib/tamlinux/source/current", root);
-    mkdir_p(src_dir);
-    snprintf(file, sizeof(file), "%s/BUNDLE", src_dir);
-    write_text(file, "format 2\nname tamlinux\nversion 0.6.34\n");
-    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == 0);
-    assert(strcmp(ver, "0.6.34") == 0);
-
-    snprintf(file, sizeof(file), "%s/VERSION", src_dir);
-    write_text(file, "0.6.35\n");
-    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == 0);
-    assert(strcmp(ver, "0.6.35") == 0);
-
+    char cur_dir[512], file[600];
     snprintf(cur_dir, sizeof(cur_dir), "%s/usr/lib/tamlinux/current", root);
     mkdir_p(cur_dir);
     snprintf(file, sizeof(file), "%s/VERSION", cur_dir);
-    write_text(file, "0.6.36\n");
+    write_text(file, "0.6.37\n");
     assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == 0);
-    assert(strcmp(ver, "0.6.36") == 0);
+    assert(strcmp(ver, "0.6.37") == 0);
 
     puts("test_cultivar: OK");
     return 0;

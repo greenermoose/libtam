@@ -3,6 +3,8 @@ LIBTAM — THE TAMLINUX C FOUNDATION LIBRARY
 libtam is the official C foundation library for Tamlinux packages, core system
 daemons, hardware telemetry probes, and command-line utilities.
 
+Follows the tam-idol 0.2.0 standard.
+
 
 VISION & ANTI-BLOAT PHILOSOPHY
 
@@ -185,9 +187,33 @@ Usage Example
     }
 
 
+WHERE THINGS ARE
+
+  include/             public C headers (tam.h, tam_uni.h, tam_key.h,
+                       tam_tty.h, tam_portal.h, tam_display*.h, tam_vt.h)
+  src/                 C source for core, portal and optional display
+  tests/               test suites run by make test and display targets
+  docs/                display.md (experimental console display control)
+  arch/                architecture notes (README-arch)
+  bugs/                defect records (B1, B2, ...)
+  ideas/               ideas from other projects
+  plans/               work phase plans (P1, P2, ...)
+  reviews/             code and design reviews (R1, R2, ...)
+  work/                WHATNOW (read it first), W records and history/
+  Makefile             make, make test, make install, make uninstall,
+                       make clean
+  VERSION              the library version
+  ROADMAP.md           milestones and queued requests
+  UPSTREAM.md          code taken from other projects (none)
+  AI-BLAME.md          how AI work is recorded here
+  ACKNOWLEDGEMENTS.md  upstream community and foundation credits
+  COPYRIGHT            copyright and license notices
+  LICENSE              GNU General Public License, version 3
+
+
 LICENSE
 
 GNU General Public License v3.0 (GPLv3). See <LICENSE> for details.
 
-Software defect tracker <bugs/README-bugs.md>: report reproducible defects
+Software defect tracker <bugs/README-bugs>: report reproducible defects
 beside their source.

@@ -3,23 +3,23 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-20, with W2
+Updated: 2026-11-20, with W3
 
 
 STATE
 
-  Version 0.7.1 on branch dev (the VERSION file is the version's
-  source of truth). The working branch was renamed from develop on
-  2026-11-20 under D272; the VERSION file and pins are unchanged.
-  Two static archives by default: libtam.a, the core,
-  which needs only libc, and libtam-portal.a, which needs D-Bus. The
-  optional libtam-display.a and libtam-display-session.a are
-  experimental.
+  Version 0.8.0 on branch dev (the VERSION file is the version's source
+  of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
+  archives by default: libtam.a, the core, which needs only libc, and
+  libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
+  libtam-display-session.a are experimental.
 
-  The newest work: 0.7.0 added the terminal foundation (tam_uni,
-  tam_key, tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1
-  moved the version into VERSION; the READMEs became plain text. The
-  history of each change is in work/history/.
+  Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
+  tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
+  version into VERSION; 0.8.0 retired tam_bundle_guard and added
+  tam_cultivar helpers; W2 renamed develop to dev; W3 brought the
+  repository up to the tam-idol 0.2.0 standard. Earlier records live in
+  work/history/.
 
   Development installs go to ~/.local with make install
   PREFIX=$HOME/.local; tam-last, tam-clam and tam-pane link libtam.a

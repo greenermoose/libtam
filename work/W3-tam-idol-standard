@@ -1,0 +1,41 @@
+W3 TAM-IDOL 0.2.0 STANDARD
+
+Date: 2026-11-20
+AI harness: agy 1.5.13
+AI model: Gemini 4 Neon (Medium)
+Commits: the commit that adds this record
+
+
+GUIDANCE
+
+  Fred: "/plan Take the next work slice for tam-idol, if there is one."
+  Fred: "Approved. Proceed."
+
+
+DONE
+
+  - Added ROADMAP.md and UPSTREAM.md, and expanded COPYRIGHT to the
+    standard tam-idol 0.2.0 format (no third-party code taken).
+  - Renamed AI_PROVENANCE.md to AI-BLAME.md using the tam-idol 0.2.0
+    intro while preserving the pre-2026-11-17 history section below it.
+  - Added "Follows the tam-idol 0.2.0 standard." and WHERE THINGS ARE to
+    README, and updated its bugs link to bugs/README-bugs.
+  - Added arch/README-arch, bugs/README-bugs, ideas/README-ideas,
+    plans/README-plans and reviews/README-reviews, and brought
+    work/README-work in line with tam-idol 0.2.0, preserving libtam's
+    notes under IN THIS REPOSITORY. Removed bugs/README-bugs.md and
+    bugs/_template.md (superseded by bugs/README-bugs).
+  - Revised work/WHATNOW for 0.8.0 and tam-idol 0.2.0 compliance.
+  - Verified with tam-idol/tools/idol-check (passes at 0.2.0) and
+    make test. No code changed; VERSION stays 0.8.0.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - No libtam work is queued. Known requests waiting for Fred's choice
+    are listed in work/WHATNOW.

@@ -10,7 +10,9 @@ CFLAGS ?= -O2 -Wall -Wextra -Wpedantic
 # Debug information names source files relative to the source tree, not
 # the directory it was built in, so builds in different places are identical.
 override CFLAGS += -g -fPIC -Iinclude -ffile-prefix-map=$(CURDIR)=.
-PREFIX ?= /usr/local
+# Development installs default to $(HOME)/.local so they need no root;
+# /usr/local is retired on Tamlinux. An explicit PREFIX still wins.
+PREFIX ?= $(HOME)/.local
 PKGCONFIGDIR ?= $(PREFIX)/lib/pkgconfig
 VERSION := $(shell tr -d '[:space:]' < VERSION)
 TAM_VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)

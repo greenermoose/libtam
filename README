@@ -146,12 +146,13 @@ Building & Testing
     # Core-only development installation, also without portal dependencies
     make core install-core PREFIX=/your/development/prefix
 
-    # Install to system
-    sudo make install PREFIX=/usr/local
+    # Development install for your user (no root needed); remove it again
+    make install
+    make uninstall
 
-    # Or install a development build for your user, and remove it again
-    make install PREFIX=$HOME/.local
-    make uninstall PREFIX=$HOME/.local
+    # Or install to the system with an explicit prefix (needs root)
+    sudo make install PREFIX=/usr/local
+    sudo make uninstall PREFIX=/usr/local
 
 make install also writes pkg-config files, libtam.pc and libtam-portal.pc, in
 $(PREFIX)/lib/pkgconfig/. Programs that use libtam, such as tam, find it with

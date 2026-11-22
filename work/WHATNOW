@@ -3,12 +3,12 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-20, with W3
+Updated: 2026-11-22, with W4
 
 
 STATE
 
-  Version 0.8.0 on branch dev (the VERSION file is the version's source
+  Version 0.9.0 on branch dev (the VERSION file is the version's source
   of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
   archives by default: libtam.a, the core, which needs only libc, and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
@@ -18,12 +18,12 @@ STATE
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
   version into VERSION; 0.8.0 retired tam_bundle_guard and added
   tam_cultivar helpers; W2 renamed develop to dev; W3 brought the
-  repository up to the tam-idol 0.2.0 standard. Earlier records live in
-  work/history/.
+  repository up to the tam-idol 0.2.0 standard. W4 defaulted make
+  install to ~/.local. Earlier records live in work/history/.
 
-  Development installs go to ~/.local with make install
-  PREFIX=$HOME/.local; tam-last, tam-clam and tam-pane link libtam.a
-  from there.
+  Plain make install now targets ~/.local and needs no root; an explicit
+  PREFIX still wins. tam-last, tam-clam and tam-pane link libtam.a from
+  there.
 
 
 NEXT
@@ -56,7 +56,8 @@ WATCH OUT
 
   - Every change bumps VERSION in the same commit: minor for a new
     module or function, patch for a fix. Consumers build against the
-    exact libtam they were tested with.
+    exact libtam they were tested with. A Makefile-only install-location
+    change does not bump VERSION: the library itself is unchanged.
   - make test runs under ASan and UBSan; the display suites are make
     test-display test-session.
   - The core must keep needing only libc: anything with another

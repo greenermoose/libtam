@@ -1,0 +1,35 @@
+W4 DEFAULT INSTALL PREFIX
+
+Date: 2026-11-22
+AI harness: OpenCode 2.2.5
+AI model: big-pickle
+Commits: This work commit
+
+GUIDANCE
+
+  Fred: "Same fix there." (after the same fix landed in tam as W43)
+
+DONE
+
+  - Changed PREFIX ?= /usr/local to PREFIX ?= $(HOME)/.local in Makefile.
+    Plain make install now targets ~/.local and needs no root; an explicit
+    PREFIX on the command line still wins for system and staged installs.
+  - Updated README: plain make install is the user development install;
+    the /usr/local example is now an explicit system install needing root.
+  - Verified prefix resolution with and without an explicit PREFIX, and
+    with make -n install.
+
+FAILED
+
+  - No VERSION bump. The rule is there so consumers pin the exact library
+    they tested; this change touches only the build/install prefix and
+    does not alter libtam's code or interface, so no re-pin is needed.
+    This matches the Makefile-only fix in tam (W43).
+  - No permanent prefix regression test was added. This repo's suites are
+    C programs; the fix was checked by dry run instead.
+
+HANDOFF
+
+  - Plain make install writes libtam.a, libtam-portal.a and both
+    pkg-config files under ~/.local.
+  - No push, Test, Run or Release was done.

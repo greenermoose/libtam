@@ -1,5 +1,6 @@
 #include "tam.h"
 #include "tam_key.h"
+#include "tam_pager.h"
 #include "tam_tty.h"
 #include "tam_uni.h"
 
@@ -241,6 +242,96 @@ static void test_tty_capabilities(void)
     printf("  [PASS] test_tty_capabilities\n");
 }
 
+static void test_pager_primitives(void)
+{
+    assert(strcmp(tam_pager_attention_sgr(true), "\033[7m") == 0);
+    assert(strcmp(tam_pager_attention_sgr(false), "\033[38;5;15;48;5;236m") == 0);
+    assert(strcmp(tam_pager_link_focus_sgr(false), "\033[1;30;46m") == 0);
+
+    /* OSC 8 safety and formatting. */
+    assert(tam_osc8_url_safe("https://tamlinux.org", 1024));
+    assert(!tam_osc8_url_safe("", 1024));
+    assert(!tam_osc8_url_safe("https://bad\033url", 1024));
+    assert(!tam_osc8_url_safe("https://bad\nurl", 1024));
+    assert(!tam_osc8_url_safe("abcdef", 4));
+
+    char buf[256];
+    size_t n = tam_osc8_open(buf, sizeof buf, "https://tamlinux.org");
+    assert(n > 0 && strcmp(buf, "\033]8;;https://tamlinux.org\033\\") == 0);
+    assert(tam_osc8_open(buf, sizeof buf, "bad\x07url") == 0);
+    n = tam_osc8_close(buf, sizeof buf);
+    assert(n == 7 && strcmp(buf, "\033]8;;\033\\") == 0);
+
+    /* Footer formatting: attention mode, plain mode, narrow, unknown total, hint. */
+    tam_pager_footer_t f = {
+        .label = "sandbox/demo.md",
+        .has_attn = true,
+        .attn_line = 5,
+        .top_line = 1,
+        .bot_line = 24,
+        .total_lines = 85,
+        .total_known = true,
+        .version = "0.4.0"
+    };
+    tam_pager_format_footer(buf, sizeof buf, 60, &f);
+    assert(strncmp(buf, "sandbox/demo.md | L5 1-24/85", 28) == 0);
+    assert(strcmp(buf + strlen(buf) - 6, "v0.4.0") == 0);
+    assert(tam_uni_str_width(buf, strlen(buf)) == 60);
+
+    f.has_attn = false;
+    f.total_known = false;
+    tam_pager_format_footer(buf, sizeof buf, 48, &f);
+    assert(strstr(buf, "sandbox/demo.md | 1-24/?") != NULL);
+    assert(strcmp(buf + strlen(buf) - 6, "v0.4.0") == 0);
+
+    f.has_attn = true;
+    f.total_known = true;
+    f.link_hint = "https://tamlinux.org";
+    tam_pager_format_footer(buf, sizeof buf, 72, &f);
+    assert(strstr(buf, "-> https://tamlinux.org") != NULL);
+    assert(strcmp(buf + strlen(buf) - 6, "v0.4.0") == 0);
+
+    /* Narrow terminal keeps line numbers and version visible. */
+    f.link_hint = NULL;
+    tam_pager_format_footer(buf, sizeof buf, 22, &f);
+    assert(strstr(buf, "L5 1-24/85") != NULL);
+    assert(strstr(buf, "v0.4.0") != NULL);
+
+    /* URI classification. */
+    assert(tam_uri_classify("#section") == TAM_URI_ANCHOR);
+    assert(tam_uri_classify("https://tamlinux.org") == TAM_URI_EXTERNAL);
+    assert(tam_uri_classify("HTTP://example.com") == TAM_URI_EXTERNAL);
+    assert(tam_uri_classify("mailto:fred@example.com") == TAM_URI_EXTERNAL);
+    assert(tam_uri_classify("page.html#top") == TAM_URI_LOCAL);
+    assert(tam_uri_classify("file:///tmp/a.md") == TAM_URI_LOCAL);
+    assert(tam_uri_classify("javascript:alert(1)") == TAM_URI_INVALID);
+    assert(tam_uri_classify("data:text/html,hi") == TAM_URI_INVALID);
+    assert(tam_uri_classify("bad\nurl") == TAM_URI_INVALID);
+
+    /* Percent decode, local resolution, and slugify. */
+    char path[256], frag[128];
+    tam_uri_percent_decode("hello%20world%21", 16, path, sizeof path);
+    assert(strcmp(path, "hello world!") == 0);
+
+    assert(tam_uri_resolve_local("sandbox/demo.md", "page.html#Check%20List",
+                                 path, sizeof path, frag, sizeof frag) == 0);
+    assert(strcmp(path, "sandbox/page.html") == 0);
+    assert(strcmp(frag, "Check List") == 0);
+
+    assert(tam_uri_resolve_local("sandbox/demo.md", "#features",
+                                 path, sizeof path, frag, sizeof frag) == 0);
+    assert(path[0] == '\0' && strcmp(frag, "features") == 0);
+
+    assert(tam_uri_resolve_local("sandbox/demo.md", "file:///etc/hosts",
+                                 path, sizeof path, frag, sizeof frag) == 0);
+    assert(strcmp(path, "/etc/hosts") == 0 && frag[0] == '\0');
+
+    tam_uri_slugify("Hello, World! (v2.0)", 20, frag, sizeof frag);
+    assert(strcmp(frag, "hello-world-v20") == 0);
+
+    printf("  [PASS] test_pager_primitives\n");
+}
+
 int main(void)
 {
     /* tam_uni_width depends on the locale's character tables. */
@@ -252,6 +343,7 @@ int main(void)
     test_keys();
     test_tty_raw();
     test_tty_capabilities();
+    test_pager_primitives();
     printf("terminal tests passed\n");
     return 0;
 }

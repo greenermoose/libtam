@@ -38,7 +38,8 @@ SRCS = src/tam_version.c \
        src/tam_cultivar.c \
        src/tam_uni.c \
        src/tam_key.c \
-       src/tam_tty.c
+       src/tam_tty.c \
+       src/tam_pager.c
 
 OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
 CORE_LIB = build/libtam.a
@@ -142,8 +143,8 @@ $(PORTAL_TEST_BIN): tests/test_tam_portal.c include/tam_portal.h $(PORTAL_LIB) $
 $(CULTIVAR_TEST_BIN): tests/test_cultivar.c src/tam_cultivar.c include/tam.h | build
 	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_cultivar.c src/tam_cultivar.c -o $@
 
-$(TERMINAL_TEST_BIN): tests/test_terminal.c include/tam.h include/tam_uni.h include/tam_key.h include/tam_tty.h src/tam_uni.c src/tam_key.c src/tam_tty.c | build
-	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_terminal.c src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_version.c -o $@
+$(TERMINAL_TEST_BIN): tests/test_terminal.c include/tam.h include/tam_uni.h include/tam_key.h include/tam_tty.h include/tam_pager.h src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_pager.c | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_terminal.c src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_pager.c src/tam_version.c -o $@
 
 test-terminal: $(TERMINAL_TEST_BIN)
 	./$(TERMINAL_TEST_BIN)
@@ -165,7 +166,7 @@ install: install-core install-portal
 install-core: $(CORE_LIB)
 	install -d $(DESTDIR)$(PREFIX)/include
 	install -m 644 include/tam.h include/tam_uni.h include/tam_key.h \
-		include/tam_tty.h $(DESTDIR)$(PREFIX)/include/
+		include/tam_tty.h include/tam_pager.h $(DESTDIR)$(PREFIX)/include/
 	install -d $(DESTDIR)$(PREFIX)/lib
 	install -m 644 $(CORE_LIB) $(DESTDIR)$(PREFIX)/lib/
 	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so
@@ -203,7 +204,7 @@ uninstall: uninstall-core uninstall-portal uninstall-display uninstall-session
 uninstall-core:
 	rm -f $(DESTDIR)$(PREFIX)/include/tam.h $(DESTDIR)$(PREFIX)/include/tam_uni.h \
 		$(DESTDIR)$(PREFIX)/include/tam_key.h $(DESTDIR)$(PREFIX)/include/tam_tty.h \
-		$(DESTDIR)$(PREFIX)/lib/libtam.a
+		$(DESTDIR)$(PREFIX)/include/tam_pager.h $(DESTDIR)$(PREFIX)/lib/libtam.a
 	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so
 	rm -f $(DESTDIR)$(PKGCONFIGDIR)/libtam.pc
 

@@ -87,6 +87,13 @@ CAPABILITIES & MODULES
   alternate screen, cursor, SGR mouse, bracketed paste, and DEC 2026
   synchronized frames. ANSI/xterm only; no terminfo.
 
+  Module: tam_pager
+  Header / Symbol: tam_pager_*, tam_osc8_*, tam_uri_* in <tam_pager.h>
+  Description: Shared terminal pager primitives: attention-line and focused-link
+  SGR helpers, safe OSC 8 hyperlink sequences, standard footer formatting
+  (<label> | L<line> <top>-<bot>/<total> vX.Y.Z), URI classification, local
+  path resolution, heading anchor slugification, and xdg-open dispatch.
+
   Module: tam_term
   Header / Symbol: tam_log_*
   Description: Colorized terminal logging and terminal escape sequence

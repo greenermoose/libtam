@@ -372,15 +372,39 @@ int tam_uri_open_external(const char *url)
         return -1;
     }
 
-    pid_t pid = fork();
-    if (pid < 0)
+    int report[2];
+    if (pipe(report) < 0)
         return -1;
+    if (fcntl(report[1], F_SETFD, FD_CLOEXEC) < 0) {
+        int err = errno;
+        close(report[0]);
+        close(report[1]);
+        errno = err;
+        return -1;
+    }
+    pid_t pid = fork();
+    if (pid < 0) {
+        int err = errno;
+        close(report[0]);
+        close(report[1]);
+        errno = err;
+        return -1;
+    }
     if (pid == 0) {
+        close(report[0]);
         pid_t grand = fork();
-        if (grand < 0)
+        if (grand < 0) {
+            int err = errno;
+            (void)write(report[1], &err, sizeof(err));
             _exit(127);
+        }
         if (grand > 0)
             _exit(0);
+        if (setsid() < 0) {
+            int err = errno;
+            (void)write(report[1], &err, sizeof(err));
+            _exit(127);
+        }
         int null_fd = open("/dev/null", O_RDWR);
         if (null_fd >= 0) {
             (void)dup2(null_fd, STDIN_FILENO);
@@ -391,10 +415,28 @@ int tam_uri_open_external(const char *url)
         }
         char *argv[] = {"xdg-open", (char *)url, NULL};
         execvp("xdg-open", argv);
+        int err = errno;
+        (void)write(report[1], &err, sizeof(err));
         _exit(127);
     }
+    close(report[1]);
+    int child_error = 0;
+    ssize_t count;
+    do {
+        count = read(report[0], &child_error, sizeof(child_error));
+    } while (count < 0 && errno == EINTR);
+    int read_error = errno;
+    close(report[0]);
     int status = 0;
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
-        continue;
+    pid_t waited;
+    do {
+        waited = waitpid(pid, &status, 0);
+    } while (waited < 0 && errno == EINTR);
+    if (count < 0) { errno = read_error; return -1; }
+    if (count != 0) { errno = count == sizeof(child_error) ? child_error : EIO; return -1; }
+    if (waited < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        if (waited >= 0) errno = EIO;
+        return -1;
+    }
     return 0;
 }

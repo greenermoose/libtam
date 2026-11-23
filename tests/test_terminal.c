@@ -5,6 +5,7 @@
 #include "tam_uni.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <locale.h>
 #include <stdio.h>
@@ -328,6 +329,27 @@ static void test_pager_primitives(void)
 
     tam_uri_slugify("Hello, World! (v2.0)", 20, frag, sizeof frag);
     assert(strcmp(frag, "hello-world-v20") == 0);
+
+    char dir[] = "/tmp/libtam-opener-XXXXXX";
+    assert(mkdtemp(dir));
+    const char *old_path = getenv("PATH");
+    char *saved_path = old_path ? strdup(old_path) : NULL;
+    assert(!old_path || saved_path);
+    assert(setenv("PATH", dir, 1) == 0);
+    assert(tam_uri_open_external("https://example.invalid") == -1);
+    assert(errno == ENOENT);
+    char opener[256];
+    snprintf(opener, sizeof opener, "%s/xdg-open", dir);
+    assert(symlink("/bin/true", opener) == 0);
+    assert(tam_uri_open_external("https://example.invalid") == 0);
+    assert(unlink(opener) == 0);
+    assert(rmdir(dir) == 0);
+    if (saved_path) {
+        assert(setenv("PATH", saved_path, 1) == 0);
+        free(saved_path);
+    } else {
+        assert(unsetenv("PATH") == 0);
+    }
 
     printf("  [PASS] test_pager_primitives\n");
 }

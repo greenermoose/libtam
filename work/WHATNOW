@@ -3,16 +3,18 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-22, with W4
+Updated: 2026-11-23, with W5
 
 
 STATE
 
-  Version 0.9.0 on branch dev (the VERSION file is the version's source
+  Version 0.9.1 on branch dev (the VERSION file is the version's source
   of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
   archives by default: libtam.a, the core, which needs only libc, and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
   libtam-display-session.a are experimental.
+
+  W5 fixes external opener exec error reporting.
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the

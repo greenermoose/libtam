@@ -1,0 +1,23 @@
+W5 OPENER FIX
+
+Date: 2026-11-23
+AI harness: Codex CLI 0.171.0
+AI model: gpt-6.2-sol, gpt-6.1-terra
+
+GUIDANCE
+
+  Fred: "Take a look at the review R1 of tam-view. Do an independent
+  analysis, then fix all tam-view bugs that are real."
+
+DONE
+
+  - Report fork and exec failure from the detached external opener.
+  - Test a missing opener and a successful exec.
+
+FAILED
+
+  - LeakSanitizer in the sandbox could not inspect its processes.
+
+HANDOFF
+
+  - Version 0.9.1 is required by the tam-view fix.

@@ -82,7 +82,7 @@ size_t tam_uri_slugify(const char *text, size_t len, char *out, size_t cap);
 
 /* Open an external URL (http://, https://, mailto:) via xdg-open without a
  * shell, redirecting stdio to /dev/null and avoiding zombies. Returns 0 on
- * dispatch or -1 on invalid URL / fork failure. */
+ * successful exec or -1 on invalid URL, fork or exec failure. */
 int tam_uri_open_external(const char *url);
 
 #ifdef __cplusplus

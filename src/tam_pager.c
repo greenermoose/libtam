@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +31,7 @@ bool tam_osc8_url_safe(const char *url, size_t max_len)
         return false;
     size_t len = 0;
     for (const unsigned char *p = (const unsigned char *)url; *p; p++) {
-        if (*p < 0x20 || *p == 0x7f)
+        if (*p < 0x20 || *p >= 0x7f)
             return false;
         len++;
         if (max_len > 0 && len > max_len)
@@ -254,13 +255,19 @@ static int hex_val(char c)
     return -1;
 }
 
-size_t tam_uri_percent_decode(const char *src, size_t len,
-                              char *out, size_t cap)
+static bool percent_decode_checked(const char *src, size_t len,
+                                   char *out, size_t cap, size_t *out_len)
 {
     if (!out || cap == 0)
-        return 0;
+        return false;
     size_t used = 0;
-    for (size_t i = 0; i < len && used + 1 < cap; i++) {
+    for (size_t i = 0; i < len; i++) {
+        if (used + 1 >= cap) {
+            out[used] = '\0';
+            if (out_len)
+                *out_len = used;
+            return false;
+        }
         if (src[i] == '%' && i + 2 < len) {
             int hi = hex_val(src[i + 1]);
             int lo = hex_val(src[i + 2]);
@@ -276,6 +283,16 @@ size_t tam_uri_percent_decode(const char *src, size_t len,
         out[used++] = src[i];
     }
     out[used] = '\0';
+    if (out_len)
+        *out_len = used;
+    return true;
+}
+
+size_t tam_uri_percent_decode(const char *src, size_t len,
+                              char *out, size_t cap)
+{
+    size_t used = 0;
+    (void)percent_decode_checked(src, len, out, cap, &used);
     return used;
 }
 
@@ -291,8 +308,13 @@ int tam_uri_resolve_local(const char *base_path, const char *href,
 
     const char *hash = strchr(href, '#');
     size_t before_hash = hash ? (size_t)(hash - href) : strlen(href);
-    if (hash && frag_out && frag_cap > 0)
-        tam_uri_percent_decode(hash + 1, strlen(hash + 1), frag_out, frag_cap);
+    if (hash && frag_out && frag_cap > 0) {
+        if (!percent_decode_checked(hash + 1, strlen(hash + 1),
+                                    frag_out, frag_cap, NULL)) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+    }
 
     /* Strip ?query from path component. */
     const char *q = memchr(href, '?', before_hash);
@@ -306,6 +328,9 @@ int tam_uri_resolve_local(const char *base_path, const char *href,
             (path_len == 9 || raw[9] == '/')) {
             raw += 9;
             path_len -= 9;
+        } else if (path_len > 0 && raw[0] != '/') {
+            errno = EINVAL;
+            return -1;
         }
     }
 
@@ -313,13 +338,18 @@ int tam_uri_resolve_local(const char *base_path, const char *href,
         return 0;
 
     char decoded[4096];
-    tam_uri_percent_decode(raw, path_len, decoded, sizeof(decoded));
+    if (!percent_decode_checked(raw, path_len, decoded, sizeof(decoded), NULL)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
     if (decoded[0] == '\0')
         return 0;
 
     if (decoded[0] == '/') {
-        if (strlen(decoded) >= path_cap)
+        if (strlen(decoded) >= path_cap) {
+            errno = ENAMETOOLONG;
             return -1;
+        }
         strcpy(path_out, decoded);
         return 0;
     }
@@ -331,16 +361,20 @@ int tam_uri_resolve_local(const char *base_path, const char *href,
         if (slash) {
             size_t dir_len = (size_t)(slash - base_path + 1);
             size_t dec_len = strlen(decoded);
-            if (dir_len + dec_len >= path_cap)
+            if (dir_len + dec_len >= path_cap) {
+                errno = ENAMETOOLONG;
                 return -1;
+            }
             memcpy(path_out, base_path, dir_len);
             memcpy(path_out + dir_len, decoded, dec_len + 1);
             return 0;
         }
     }
 
-    if (strlen(decoded) >= path_cap)
+    if (strlen(decoded) >= path_cap) {
+        errno = ENAMETOOLONG;
         return -1;
+    }
     strcpy(path_out, decoded);
     return 0;
 }
@@ -375,7 +409,8 @@ int tam_uri_open_external(const char *url)
     int report[2];
     if (pipe(report) < 0)
         return -1;
-    if (fcntl(report[1], F_SETFD, FD_CLOEXEC) < 0) {
+    if (fcntl(report[0], F_SETFD, FD_CLOEXEC) < 0 ||
+        fcntl(report[1], F_SETFD, FD_CLOEXEC) < 0) {
         int err = errno;
         close(report[0]);
         close(report[1]);
@@ -413,6 +448,12 @@ int tam_uri_open_external(const char *url)
             if (null_fd > STDERR_FILENO)
                 close(null_fd);
         }
+        static const int sigs[] = {SIGINT, SIGQUIT, SIGTERM, SIGWINCH, SIGPIPE, SIGTSTP};
+        for (size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++)
+            (void)signal(sigs[i], SIG_DFL);
+        sigset_t none;
+        sigemptyset(&none);
+        (void)sigprocmask(SIG_SETMASK, &none, NULL);
         char *argv[] = {"xdg-open", (char *)url, NULL};
         execvp("xdg-open", argv);
         int err = errno;

@@ -254,6 +254,7 @@ static void test_pager_primitives(void)
     assert(!tam_osc8_url_safe("", 1024));
     assert(!tam_osc8_url_safe("https://bad\033url", 1024));
     assert(!tam_osc8_url_safe("https://bad\nurl", 1024));
+    assert(!tam_osc8_url_safe("http://a\xC2\x9B" "31mX", 1024));
     assert(!tam_osc8_url_safe("abcdef", 4));
 
     char buf[256];
@@ -326,6 +327,16 @@ static void test_pager_primitives(void)
     assert(tam_uri_resolve_local("sandbox/demo.md", "file:///etc/hosts",
                                  path, sizeof path, frag, sizeof frag) == 0);
     assert(strcmp(path, "/etc/hosts") == 0 && frag[0] == '\0');
+    assert(tam_uri_resolve_local("sandbox/demo.md", "file://localhost/etc/hosts",
+                                 path, sizeof path, frag, sizeof frag) == 0);
+    assert(strcmp(path, "/etc/hosts") == 0);
+    assert(tam_uri_resolve_local("sandbox/demo.md", "file://example.com/etc/hosts",
+                                 path, sizeof path, frag, sizeof frag) == -1);
+    char tiny[4];
+    assert(tam_uri_resolve_local("sandbox/demo.md", "page.html#longfrag",
+                                 path, sizeof path, tiny, sizeof tiny) == -1);
+    assert(tam_uri_resolve_local("sandbox/demo.md", "page.html",
+                                 tiny, sizeof tiny, frag, sizeof frag) == -1);
 
     tam_uri_slugify("Hello, World! (v2.0)", 20, frag, sizeof frag);
     assert(strcmp(frag, "hello-world-v20") == 0);

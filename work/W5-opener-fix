@@ -1,18 +1,25 @@
 W5 OPENER FIX
 
 Date: 2026-11-23
-AI harness: Codex CLI 0.171.0
-AI model: gpt-6.2-sol, gpt-6.1-terra
+AI harness: Codex CLI 0.171.0, Antigravity CLI 1.5.15
+AI model: gpt-6.2-sol, gpt-6.1-terra, Gemini 4 Argon (Medium)
 
 GUIDANCE
 
-  Fred: "Take a look at the review R1 of tam-view. Do an independent
-  analysis, then fix all tam-view bugs that are real."
+  Fred: "Take a look at review R1 of tam-view and the work codex started.
+  Independently evaluate the bugs found and fix all of them that are real.
+  Take over any work claims that codex still hold."
 
 DONE
 
-  - Report fork and exec failure from the detached external opener.
-  - Test a missing opener and a successful exec.
+  - Report fork and exec failure from the detached external opener, set
+    close-on-exec on both report pipe ends, and reset signal handlers
+    and mask before execvp.
+  - Refuse non-local file:// hosts and truncated outputs in
+    tam_uri_resolve_local, and reject non-ASCII bytes in
+    tam_osc8_url_safe.
+  - Test a missing opener, a successful exec, remote file:// rejection,
+    truncation errors, and UTF-8 C1 rejection in OSC 8 URLs.
 
 FAILED
 
@@ -20,4 +27,4 @@ FAILED
 
 HANDOFF
 
-  - Version 0.9.1 is required by the tam-view fix.
+  - Version 0.9.1 is installed to ~/.local and used by tam-view 0.4.1.

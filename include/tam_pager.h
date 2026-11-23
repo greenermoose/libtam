@@ -71,7 +71,8 @@ size_t tam_uri_percent_decode(const char *src, size_t len,
 /* Resolve a local href (relative path, absolute path, or file:// URL, with
  * optional ?query and #fragment) against base_path. Writes the resolved path
  * to path_out (empty if href is a pure #anchor) and the decoded fragment to
- * frag_out (empty if none). Returns 0 on success or -1 on error. */
+ * frag_out (empty if none). Non-local file:// hosts and truncated outputs fail.
+ * Returns 0 on success or -1 on error. */
 int tam_uri_resolve_local(const char *base_path, const char *href,
                           char *path_out, size_t path_cap,
                           char *frag_out, size_t frag_cap);
@@ -81,8 +82,9 @@ int tam_uri_resolve_local(const char *base_path, const char *href,
 size_t tam_uri_slugify(const char *text, size_t len, char *out, size_t cap);
 
 /* Open an external URL (http://, https://, mailto:) via xdg-open without a
- * shell, redirecting stdio to /dev/null and avoiding zombies. Returns 0 on
- * successful exec or -1 on invalid URL, fork or exec failure. */
+ * shell, redirecting stdio to /dev/null and avoiding zombies. Callers should
+ * confirm with the user before invoking. Returns 0 on successful exec or -1 on
+ * invalid URL, fork or exec failure. */
 int tam_uri_open_external(const char *url);
 
 #ifdef __cplusplus

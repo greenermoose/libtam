@@ -3,7 +3,20 @@
 This file lists every piece of code libtam takes from another project.
 An idea taken without its code goes in `ideas/`, not here.
 
-Nothing taken yet.
+## tam-view document source, layout and renderers
+
+- **Project:** tam-view (https://github.com/greenermoose/tam-view)
+- **License:** GNU General Public License, version 3 or later
+- **Source:** `src/source.c`, `src/layout.c`, `src/render.c`,
+  `src/render_md.c`, `src/render_html.c`, `src/render_mermaid.c`,
+  `include/render_internal.h`, the renderer part of `include/view.h`, and
+  `tests/test-layout.c` and `tests/test-render.c`, at commit `3444bb1`
+- **Here:** `src/render/`, `include/tam_render.h`, `tests/test_render.c`
+  and `tests/test_render_layout.c`
+- **Changes:** Moved, not copied: tam-view and tam-knox now link
+  `libtam-render.a`. Public names gained the `tam_source_`,
+  `tam_position_` and `tam_render_` prefixes; internal ones `tam__`.
+- **Taken:** 2026-11-26
 
 ## How to record a piece
 

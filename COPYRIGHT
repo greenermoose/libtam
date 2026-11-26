@@ -14,6 +14,12 @@ FOR A PARTICULAR PURPOSE.
 
 CODE TAKEN FROM OTHER PROJECTS
 
-None. When a repository takes code from another project, UPSTREAM.md
-lists each piece, its source file and commit, and how it was changed,
-and this section carries that project's copyright notice and license.
+tam-view (https://github.com/greenermoose/tam-view)
+  Copyright (C) 2026 Fred Horch.
+  License: GNU General Public License, version 3 or later (see LICENSE).
+  Covers src/render/, include/tam_render.h, tests/test_render.c and
+  tests/test_render_layout.c, moved from tam-view. See UPSTREAM.md.
+
+When a repository takes code from another project, UPSTREAM.md lists each
+piece, its source file and commit, and how it was changed, and this
+section carries that project's copyright notice and license.

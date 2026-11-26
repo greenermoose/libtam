@@ -1,0 +1,42 @@
+W11 0.13.0: LIBTAM-RENDER.A
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W10
+
+
+GUIDANCE
+
+  Fred: "Do 0.13.0"
+
+
+DONE
+
+  - Moved tam-view's document source, layout and Markdown/HTML/Mermaid
+    renderers, with their two test files, into src/render/,
+    include/tam_render.h and tests/test_render*.c. One rename map was
+    applied to libtam, tam-view and tam-knox together; every symbol in
+    libtam-render.a now starts with tam_ or tam__.
+  - The public header carries what callers use, including the in-memory
+    buffer, renderers and box characters that tam-knox needs; the row
+    builders stay in src/render/render_internal.h.
+  - The header asserts a 64-bit off_t, part of its structures.
+  - Makefile: libtam-render.a is built, tested (with sanitizers) and
+    installed by default, with libtam-render.pc. "make" alone used to
+    rebuild only the version header, because that rule came first;
+    .DEFAULT_GOAL is now all.
+  - UPSTREAM.md and COPYRIGHT record the move.
+  - tam-view 0.4.3 and tam-knox 1.0.8 deleted their copies and link the
+    archive; both pass make test and make sanitize.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - The consumer migrations are next (P1). Renderer bugs now belong
+    here; tam-view's R1 has open findings on the moved code.

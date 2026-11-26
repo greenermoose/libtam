@@ -3,12 +3,12 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W10
+Updated: 2026-11-26, with W11
 
 
 STATE
 
-  Version 0.12.0 on branch dev (the VERSION file is the version's source
+  Version 0.13.0 on branch dev (the VERSION file is the version's source
   of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
   archives by default: libtam.a, the core, which needs only libc, and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
@@ -21,7 +21,8 @@ STATE
   released 0.10.0, the breaking core fixes, with every caller migrated.
   W9 released 0.11.0, the shared primitives (tam_proc, tam_io, tam_sock,
   tam_b64 and the path, UTF-8, guard and JSON additions). W10 released
-  0.12.0, the terminal stack.
+  0.12.0, the terminal stack. W11 released 0.13.0: libtam-render.a,
+  holding tam-view's renderer, now shared by tam-view and tam-knox.
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
@@ -40,8 +41,10 @@ NEXT
   P1 (plans/P1-0.7-refactor.md) is queued, one version per slice, each
   landing on Fred's acceptance:
 
-  0. P1 0.13.0: libtam-render.a from tam-view's renderer, then the
-     consumer migrations (tam-edit, tam-clam, tam-last, tam-pane first).
+  0. P1 consumer migrations, one program per slice: tam-edit, tam-clam,
+     tam-last and tam-pane first. Renderer bugs and tam-view R1's open
+     findings on render.c, render_html.c and source.c now belong here
+     (src/render).
 
   These requests stay queued, each to start only when Fred asks:
 

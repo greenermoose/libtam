@@ -1,6 +1,8 @@
-# Default libtam build is two static libraries (display/session are optional):
+# Default libtam build is three static libraries (display/session are optional):
 #   libtam.a         the core; needs only libc
 #   libtam-portal.a  desktop portals; needs D-Bus (pkg-config dbus-1)
+#   libtam-render.a  document source, layout and Markdown/HTML/Mermaid
+#                    rendering; needs only libtam.a
 # Programs link them statically, so each carries only the objects it uses and
 # nothing that does not use the portal loads D-Bus.
 
@@ -18,6 +20,9 @@ VERSION := $(shell tr -d '[:space:]' < VERSION)
 TAM_VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
 TAM_VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
 TAM_VERSION_PATCH := $(shell echo $(VERSION) | cut -d. -f3)
+
+# "make" alone builds the libraries; the version rule below is not the goal.
+.DEFAULT_GOAL := all
 
 include/tam.h: VERSION
 	@sed -i \
@@ -56,6 +61,15 @@ PORTAL_TEST_BIN = build/test_tam_portal
 CULTIVAR_TEST_BIN = build/test_tam_cultivar
 TERMINAL_TEST_BIN = build/test_tam_terminal
 PRIMITIVES_TEST_BIN = build/test_tam_primitives
+# libtam-render.a: tam-view's document source, layout and renderers. It
+# needs only libtam.a, so it is built and installed by default.
+RENDER_SRCS = src/render/source.c src/render/layout.c src/render/render.c \
+              src/render/render_md.c src/render/render_html.c src/render/render_mermaid.c
+RENDER_OBJS = $(patsubst src/render/%.c,build/render/%.o,$(RENDER_SRCS))
+RENDER_LIB = build/libtam-render.a
+RENDER_CFLAGS = -D_FILE_OFFSET_BITS=64 -Isrc/render
+RENDER_TEST_BIN = build/test_tam_render
+RENDER_LAYOUT_TEST_BIN = build/test_tam_render_layout
 DISPLAY_SRCS = src/tam_display_discovery.c src/tam_display_kms.c src/tam_display_plan.c src/tam_display_fbcon.c src/tam_vt.c src/tam_display_access.c src/tam_display_restore.c src/tam_display_atomic.c
 DISPLAY_OBJS = $(patsubst src/%.c,build/display/%.o,$(DISPLAY_SRCS))
 SESSION_CFLAGS ?= $(shell pkg-config --cflags libsystemd)
@@ -67,11 +81,12 @@ DISPLAY_LIB = build/libtam-display.a
 DISPLAY_SAN_OBJS = $(patsubst src/%.c,build/display-asan/%.o,$(DISPLAY_SRCS))
 SAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer
 
-.PHONY: all core portal display test test-display test-terminal clean install install-core install-portal install-display uninstall uninstall-core uninstall-portal uninstall-display FORCE
+.PHONY: all core portal render display test test-display test-terminal clean install install-core install-portal install-render install-display uninstall uninstall-core uninstall-portal uninstall-render uninstall-display FORCE
 
-all: $(CORE_LIB) $(PORTAL_LIB)
+all: $(CORE_LIB) $(PORTAL_LIB) $(RENDER_LIB)
 core: $(CORE_LIB)
 portal: $(PORTAL_LIB)
+render: $(RENDER_LIB)
 display: $(DISPLAY_LIB)
 
 session: $(SESSION_LIB)
@@ -137,6 +152,23 @@ $(PORTAL_LIB): build/tam_portal.o
 	rm -f $@
 	$(AR) rcs $@ $^
 
+build/render:
+	mkdir -p $@
+
+build/render/%.o: src/render/%.c $(wildcard include/*.h) src/render/render_internal.h build/.flags | build/render
+	$(CC) $(CFLAGS) $(RENDER_CFLAGS) -c $< -o $@
+
+$(RENDER_LIB): $(RENDER_OBJS)
+	rm -f $@
+	$(AR) rcs $@ $^
+
+# The renderer and the whole core, built with sanitizers.
+$(RENDER_TEST_BIN): tests/test_render.c $(RENDER_SRCS) $(SRCS) $(wildcard include/*.h) src/render/render_internal.h | build
+	$(CC) $(CFLAGS) $(RENDER_CFLAGS) -fsanitize=address,undefined tests/test_render.c $(RENDER_SRCS) $(SRCS) -o $@
+
+$(RENDER_LAYOUT_TEST_BIN): tests/test_render_layout.c $(RENDER_SRCS) $(SRCS) $(wildcard include/*.h) src/render/render_internal.h | build
+	$(CC) $(CFLAGS) $(RENDER_CFLAGS) -fsanitize=address,undefined tests/test_render_layout.c $(RENDER_SRCS) $(SRCS) -o $@
+
 $(TEST_BIN): tests/test_tam.c include/tam.h $(CORE_LIB)
 	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_tam.c $(CORE_LIB) -o $@
 
@@ -160,20 +192,22 @@ test-terminal: $(TERMINAL_TEST_BIN)
 $(PRIMITIVES_TEST_BIN): tests/test_primitives.c $(SRCS) $(wildcard include/*.h) src/tam_internal.h | build
 	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_primitives.c $(SRCS) -o $@
 
-test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(CULTIVAR_TEST_BIN) $(TERMINAL_TEST_BIN) $(PRIMITIVES_TEST_BIN)
+test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(CULTIVAR_TEST_BIN) $(TERMINAL_TEST_BIN) $(PRIMITIVES_TEST_BIN) $(RENDER_TEST_BIN) $(RENDER_LAYOUT_TEST_BIN)
 	./$(TEST_BIN)
 	./$(FILES_TEST_BIN)
 	./$(PORTAL_TEST_BIN)
 	./$(CULTIVAR_TEST_BIN)
 	./$(TERMINAL_TEST_BIN)
 	./$(PRIMITIVES_TEST_BIN)
+	./$(RENDER_LAYOUT_TEST_BIN)
+	./$(RENDER_TEST_BIN)
 
 clean:
 	rm -rf build
 
 # libtam 0.3.0 and earlier installed a shared libtam.so; install removes it so
 # nothing links it by accident.
-install: install-core install-portal
+install: install-core install-portal install-render
 
 install-core: $(CORE_LIB)
 	install -d $(DESTDIR)$(PREFIX)/include
@@ -202,6 +236,17 @@ install-portal: install-core $(PORTAL_LIB)
 		'Libs: -L$${libdir} -ltam-portal' > $(DESTDIR)$(PKGCONFIGDIR)/libtam-portal.pc
 	chmod 644 $(DESTDIR)$(PKGCONFIGDIR)/libtam.pc $(DESTDIR)$(PKGCONFIGDIR)/libtam-portal.pc
 
+install-render: install-core $(RENDER_LIB)
+	install -m 644 include/tam_render.h $(DESTDIR)$(PREFIX)/include/
+	install -m 644 $(RENDER_LIB) $(DESTDIR)$(PREFIX)/lib/
+	printf '%s\n' 'prefix=$(PREFIX)' 'includedir=$${prefix}/include' \
+		'libdir=$${prefix}/lib' '' 'Name: libtam-render' \
+		'Description: Tamlinux document source, layout and Markdown/HTML/Mermaid rendering' \
+		'Version: $(VERSION)' 'Requires: libtam = $(VERSION)' \
+		'Cflags: -I$${includedir} -D_FILE_OFFSET_BITS=64' \
+		'Libs: -L$${libdir} -ltam-render' > $(DESTDIR)$(PKGCONFIGDIR)/libtam-render.pc
+	chmod 644 $(DESTDIR)$(PKGCONFIGDIR)/libtam-render.pc
+
 install-display: $(DISPLAY_LIB)
 	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib $(DESTDIR)$(PKGCONFIGDIR)
 	install -m 644 include/tam_display.h include/tam_vt.h $(DESTDIR)$(PREFIX)/include/
@@ -213,7 +258,11 @@ install-display: $(DISPLAY_LIB)
 		'Libs: -L$${libdir} -ltam-display' > $(DESTDIR)$(PKGCONFIGDIR)/libtam-display.pc
 	chmod 644 $(DESTDIR)$(PKGCONFIGDIR)/libtam-display.pc
 
-uninstall: uninstall-core uninstall-portal uninstall-display uninstall-session
+uninstall: uninstall-core uninstall-portal uninstall-render uninstall-display uninstall-session
+
+uninstall-render:
+	rm -f $(DESTDIR)$(PREFIX)/include/tam_render.h $(DESTDIR)$(PREFIX)/lib/libtam-render.a
+	rm -f $(DESTDIR)$(PKGCONFIGDIR)/libtam-render.pc
 
 uninstall-core:
 	rm -f $(DESTDIR)$(PREFIX)/include/tam.h $(DESTDIR)$(PREFIX)/include/tam_uni.h \

@@ -211,7 +211,8 @@ Consumer bugs found along the way are listed at the end.
 - **Evidence:** `cmp` of each pair.
 - **Fix:** Fred decided on 2026-11-25 to move the renderer into a new
   optional `libtam-render.a` that both programs link (P1 Phase 4).
-- **Status:** open
+- **Status:** fixed in 0.13.0; tam-view 0.4.3 and tam-knox 1.0.8 link
+  `libtam-render.a`
 
 ### 10. The display archives do not provide what a compositor needs (low)
 

@@ -119,6 +119,16 @@ CAPABILITIES & MODULES
   mouse, bracketed paste, OSC 52 copy and DEC 2026 synchronized frames.
   ANSI/xterm only; no terminfo.
 
+  Module: tam_render (libtam-render.a)
+  Header / Symbol: tam_source_*, tam_position_*, tam_render_* in
+  <tam_render.h>
+  Description: Document rendering for terminal programs, moved from
+  tam-view in 0.13.0: a buffered input source, UTF-8 row layout with
+  styles and hyperlinks, and renderers that turn Markdown, HTML and Mermaid
+  into styled text, in memory (tam_render_markdown and friends) or from a
+  source (tam_render_source). Build with -D_FILE_OFFSET_BITS=64 and link
+  libtam-render.a before libtam.a. Used by tam-view and tam-knox.
+
   Module: tam_pager
   Header / Symbol: tam_pager_*, tam_osc8_*, tam_uri_* in <tam_pager.h>
   Description: Shared terminal pager primitives: attention-line and focused-link

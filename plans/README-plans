@@ -42,4 +42,6 @@ KEEPING PLANS CURRENT
 
 IN THIS REPOSITORY
 
-  No plans recorded yet.
+  P1-0.7-refactor.md  0.9.2 to 0.13.x: core fixes, shared primitives,
+                      libtam-render.a and consumer migration for
+                      Tamlinux 0.7

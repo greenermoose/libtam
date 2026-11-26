@@ -60,5 +60,9 @@ RECORD TEMPLATE
 
 IN THIS REPOSITORY
 
-  Index: no reviews recorded yet. Add one line per review: its file name
-  and what it reviewed.
+  Index, one line per review:
+
+    R1-pager-terminal-and-core-modules.md  tam_pager, terminal and core
+                                           modules at 0.9.0
+    R2-whole-suite-consumers.md            libtam against every Tamlinux
+                                           C program at 0.9.1

@@ -3,7 +3,7 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-23, with W5
+Updated: 2026-11-25, with W6
 
 
 STATE
@@ -14,7 +14,9 @@ STATE
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
   libtam-display-session.a are experimental.
 
-  W5 fixes external opener exec error reporting.
+  W5 fixes external opener exec error reporting. W6 reviewed libtam
+  against every Tamlinux C program (reviews/R2) and wrote the 0.7
+  refactor plan (plans/P1), which Fred approved.
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
@@ -30,8 +32,15 @@ STATE
 
 NEXT
 
-  No libtam work is queued. These are the known requests, each to start
-  only when Fred asks:
+  P1 (plans/P1-0.7-refactor.md) is queued, one version per slice, each
+  landing on Fred's acceptance:
+
+  0. P1 0.9.2: bump VERSION for a3e0901 and correct the stale comments.
+     Then 0.10.0, the breaking core fixes with every caller migrated in
+     the same slice; 0.11.0 primitives; 0.12.0 terminal; 0.13.0
+     libtam-render.a; then the consumer migrations.
+
+  These requests stay queued, each to start only when Fred asks:
 
   1. Kitty keyboard protocol decoding in tam_key (CSI u, release events,
      the flags query), so our programs can ask tam-last for every key.
@@ -42,7 +51,7 @@ NEXT
   2. A Wayland wire module and evdev keymaps, shared by tam-pane (server
      side, its P6) and tam-last (client side, in src/wl/ and src/keys/
      today). Both projects list "libtam or the program" as an open
-     point.
+     point. Fred, 2026-11-25: not before Tamlinux 0.7.0.
 
   3. Display (docs/display.md, "Remaining gates and tests"): the
      physical multi-monitor trial and the physical fbcon, VT and desktop
@@ -51,7 +60,7 @@ NEXT
 
 WAITING FOR FRED
 
-  - Which of the requests above, if any, comes next.
+  - Acceptance of each P1 version before the next one starts.
 
 
 WATCH OUT

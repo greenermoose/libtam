@@ -1,0 +1,45 @@
+W6 WHOLE-SUITE REVIEW AND THE 0.7 REFACTOR PLAN
+
+Date: 2026-11-25
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+
+
+GUIDANCE
+
+  Fred: "Review all of the Tamlinux programs and libtam. Determine
+  whether the library can be refactored or improved to provide more
+  robust, reliable, concise, and maintainable code across all the
+  programs in the 0.7.x Tamlinux cultivar we are preparing."
+
+  Fred chose: the renderer moves into a new libtam archive; fix
+  semantics in place and migrate callers; defer the Wayland wire and
+  evdev keymaps until after Tamlinux 0.7.0.
+
+
+DONE
+
+  - Added reviews/R2-whole-suite-consumers.md: 11 libtam findings and
+    the consumer bugs found along the way. Findings 1-4, the tam-hide
+    daemon, tam-knox's feed call, tam-edit's save mode and the
+    tam-view/tam-knox renderer copy were checked in the source; the
+    rest rest on file:line evidence from read-only sweeps.
+  - Added plans/P1-0.7-refactor.md (0.9.2 to 0.13.x) with Fred's three
+    decisions.
+  - Updated R1's status lines: 2, 3 and 4 fixed; 1 mostly fixed; 5 and
+    6 open; 7 documented.
+  - Indexed R1, R2 and P1 in their README files.
+  - Corrected tam-pane's P6, which said libtam already had seat
+    handling, in tam-pane's own commit.
+
+
+FAILED
+
+  - Nothing. No code changed; nothing was built or run.
+
+
+HANDOFF
+
+  - P1 0.9.2 is next: a version bump for a3e0901 plus the stale
+    comments. Then 0.10.0, the breaking core fixes with their callers.
+  - Each version is one slice and lands on Fred's acceptance.

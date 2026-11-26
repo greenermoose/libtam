@@ -27,6 +27,22 @@ for a fix. Consumers build and test against a pinned version of
 - **0.8.0: cultivar helpers.** Retired `tam_bundle_guard` and added
   `tam_cultivar` (`tam_install_pending`, `tam_cultivar_read_version`).
 
+## Planned: the 0.7 refactor ([P1](plans/P1-0.7-refactor.md))
+
+Approved by Fred on 2026-11-25, from [review R2](reviews/R2-whole-suite-consumers.md).
+Each version lands on his acceptance.
+
+- **0.9.2:** version bump for the `tam_pager` hardening, and stale
+  comments corrected.
+- **0.10.0:** core semantics fixed in place, with every caller migrated
+  (`tam_str`, `tam_fs`, `tam_key_feed`, `tam_exec`, one error
+  convention).
+- **0.11.0:** process, I/O, socket, time, base64 and locale primitives.
+- **0.12.0:** terminal suspend/resume, crash restore, paste and mouse
+  events, key names.
+- **0.13.0:** `libtam-render.a`, holding tam-view's renderer, then the
+  consumer migrations.
+
 ## Queued requests (on Fred's word)
 
 These are known requests waiting for Fred to choose what comes next:
@@ -36,7 +52,8 @@ These are known requests waiting for Fred to choose what comes next:
   every key cleanly from `tam-last`.
 - **Shared Wayland wire and evdev keymaps.** Candidate shared module
   for `tam-pane` (server side) and `tam-last` (client side), if Fred
-  chooses to place it in `libtam` rather than in each program.
+  chooses to place it in `libtam` rather than in each program. Not
+  before Tamlinux 0.7.0 (Fred, 2026-11-25).
 - **Console display hardware gates (`docs/display.md`).** Physical
   multi-monitor trial and physical fbcon, VT and desktop handoff,
   requiring Fred at the hardware.

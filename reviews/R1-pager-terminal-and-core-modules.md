@@ -32,7 +32,9 @@ memory-safety defect.
   reported as "Opened:" (tam-view B3).
 - **Fix:** Pass the exec result back through a close-on-exec pipe, call
   `setsid()` in the grandchild, and document that callers must confirm.
-- **Status:** open; the user-facing effect is tracked as tam-view B3
+- **Status:** mostly fixed in `ec98a07` and `a3e0901` (report pipe,
+  `setsid`, signal reset). The opener still inherits the caller's
+  descriptors that lack close-on-exec; P1 0.10.0.
 
 ### 2. `file://host/path` resolves as a relative path (low)
 
@@ -43,7 +45,7 @@ memory-safety defect.
   `file://example.com/etc/hosts` gives `/home/u/docs/example.com/etc/hosts`
   and success.
 - **Fix:** Refuse a non-local host.
-- **Status:** open
+- **Status:** fixed in `a3e0901`
 
 ### 3. The fragment contract is unstated, and long paths truncate silently (low)
 
@@ -55,7 +57,7 @@ memory-safety defect.
 - **Evidence:** Source inspection, plus a direct call with
   `other.md#a%2520b`, which returns `a%20b`.
 - **Fix:** Document the decoded fragment, and fail on truncation.
-- **Status:** open
+- **Status:** fixed in `a3e0901`
 
 ### 4. The OSC 8 URL check accepts non-ASCII bytes (low)
 
@@ -66,7 +68,8 @@ memory-safety defect.
 - **Evidence:** `tam_osc8_url_safe("http://a\xC2\x9B" "31mX", 0)` returns
   true.
 - **Fix:** Accept only bytes 0x20–0x7E, or percent-encode the rest.
-- **Status:** open
+- **Status:** fixed in `a3e0901` (only 0x20-0x7E accepted); the
+  `tam_pager.h` comment is still stale, P1 0.9.2
 
 ### 5. The `tam_install_pending` header describes removed behaviour (low)
 
@@ -76,7 +79,7 @@ memory-safety defect.
   code checks only the first path, which is the one the installer writes.
 - **Evidence:** [tam_cultivar.c](../src/tam_cultivar.c#L18-L23).
 - **Fix:** Correct the comment.
-- **Status:** open
+- **Status:** open; P1 0.9.2
 
 ### 6. A failed `tam_str` append invites a leak (low)
 
@@ -88,7 +91,7 @@ memory-safety defect.
 - **Evidence:** Source inspection.
 - **Fix:** Document the pattern in `tam.h`, and check `len + addlen` and the
   doubling for overflow.
-- **Status:** open
+- **Status:** open; became R2 finding 1
 
 ### 7. Width depends on the caller's locale (low)
 
@@ -99,7 +102,7 @@ memory-safety defect.
 - **Evidence:** Source inspection.
 - **Fix:** Document the requirement in `tam_uni.h`, or use built-in width
   tables.
-- **Status:** open
+- **Status:** documented in `tam_uni.h`; P1 0.11.0 adds `tam_locale_init`
 
 ## tam's concerns that do not hold
 

@@ -107,14 +107,17 @@ CAPABILITIES & MODULES
   Module: tam_key
   Header / Symbol: tam_key_* in <tam_key.h>
   Description: Byte-stream key decoder for ANSI/xterm terminals: UTF-8 text,
-  control keys, CSI and SS3 sequences, modifiers, split sequences and an
-  escape timeout.
+  control keys, CSI and SS3 sequences, modifiers, split sequences, an
+  escape timeout, bracketed-paste and SGR mouse events, and key names for
+  configuration files (tam_key_name_parse, tam_key_name_format).
 
   Module: tam_tty
   Header / Symbol: tam_tty_* in <tam_tty.h>
-  Description: Raw mode with guaranteed restore, size and SIGWINCH support,
-  alternate screen, cursor, SGR mouse, bracketed paste, and DEC 2026
-  synchronized frames. ANSI/xterm only; no terminfo.
+  Description: Raw and cbreak modes, restore after a crash, kill or exit
+  without close (tam_tty_install_restore), suspend and resume around child
+  programs and Ctrl+Z, a resize wake-up, alternate screen, cursor, SGR
+  mouse, bracketed paste, OSC 52 copy and DEC 2026 synchronized frames.
+  ANSI/xterm only; no terminfo.
 
   Module: tam_pager
   Header / Symbol: tam_pager_*, tam_osc8_*, tam_uri_* in <tam_pager.h>

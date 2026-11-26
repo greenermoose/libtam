@@ -13,6 +13,10 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <time.h>
 
 static void test_utf8(void)
 {
@@ -401,6 +405,349 @@ static void test_pager_primitives(void)
     printf("  [PASS] test_pager_primitives\n");
 }
 
+static int open_pty(int *slave)
+{
+    int master = posix_openpt(O_RDWR | O_NOCTTY);
+    assert(master >= 0 && grantpt(master) == 0 && unlockpt(master) == 0);
+    *slave = open(ptsname(master), O_RDWR | O_NOCTTY);
+    assert(*slave >= 0);
+    return master;
+}
+
+/* Read what the slave side wrote to the terminal. */
+static size_t drain_master(int master, char *buf, size_t cap)
+{
+    size_t n = 0;
+    struct timespec pause = { 0, 20 * 1000000L };
+    nanosleep(&pause, NULL);
+    int flags = fcntl(master, F_GETFL);
+    fcntl(master, F_SETFL, flags | O_NONBLOCK);
+    for (;;) {
+        ssize_t r = read(master, buf + n, cap - 1 - n);
+        if (r <= 0) break;
+        n += (size_t)r;
+    }
+    fcntl(master, F_SETFL, flags);
+    buf[n] = '\0';
+    return n;
+}
+
+static void feed_all(tam_key_parser_t *p, const char *data, size_t len,
+                     tam_key_event_t *evs, int *count, char *pasted, size_t *plen)
+{
+    while (len > 0) {
+        int took = tam_key_feed(p, data, len);
+        assert(took >= 0);
+        data += took;
+        len -= (size_t)took;
+        tam_key_event_t ev;
+        while (tam_key_next(p, &ev) == 1) {
+            if (ev.type == TAM_KEY_PASTE) {
+                memcpy(pasted + *plen, ev.text, ev.len);
+                *plen += ev.len;
+            } else {
+                evs[(*count)++] = ev;
+            }
+        }
+    }
+}
+
+static void test_paste_and_mouse(void)
+{
+    tam_key_parser_t p;
+    tam_key_event_t evs[32];
+    int count = 0;
+    static char pasted[4096];
+    size_t plen = 0;
+
+    /* A paste with an escape sequence and a newline inside, between keys. */
+    tam_key_init(&p);
+    const char *in = "a\x1b[200~qs\x1b[Ahello\nx\x1b[201~b";
+    feed_all(&p, in, strlen(in), evs, &count, pasted, &plen);
+    assert(count == 4);
+    assert(evs[0].type == TAM_KEY_CHAR && evs[0].codepoint == 'a');
+    assert(evs[1].type == TAM_KEY_PASTE_BEGIN);
+    assert(evs[2].type == TAM_KEY_PASTE_END);
+    assert(evs[3].type == TAM_KEY_CHAR && evs[3].codepoint == 'b');
+    assert(plen == 12 && memcmp(pasted, "qs\x1b[Ahello\nx", 12) == 0);
+
+    /* A large paste, with the end marker split across feeds, byte by byte. */
+    tam_key_init(&p);
+    count = 0;
+    plen = 0;
+    static char big[3000];
+    memcpy(big, "\x1b[200~", 6);
+    for (int i = 6; i < 2994; i++) big[i] = (char)('a' + i % 26);
+    memcpy(big + 2994, "\x1b[201~", 6);
+    for (size_t i = 0; i < sizeof big; i++)
+        feed_all(&p, big + i, 1, evs, &count, pasted, &plen);
+    assert(count == 2 && evs[0].type == TAM_KEY_PASTE_BEGIN && evs[1].type == TAM_KEY_PASTE_END);
+    assert(plen == 2988 && memcmp(pasted, big + 6, 2988) == 0);
+    /* The same in one large chunk. */
+    tam_key_init(&p);
+    count = 0;
+    plen = 0;
+    feed_all(&p, big, sizeof big, evs, &count, pasted, &plen);
+    assert(count == 2 && plen == 2988 && memcmp(pasted, big + 6, 2988) == 0);
+    /* An ESC timeout inside a paste does not end it or eat the ESC. */
+    tam_key_init(&p);
+    assert(tam_key_feed(&p, "\x1b[200~z\x1b", 8) == 8);
+    tam_key_event_t ev;
+    assert(tam_key_next(&p, &ev) == 1 && ev.type == TAM_KEY_PASTE_BEGIN);
+    assert(tam_key_next(&p, &ev) == 1 && ev.type == TAM_KEY_PASTE && ev.len == 1);
+    assert(tam_key_next(&p, &ev) == 0);
+    assert(tam_key_timeout(&p, &ev) == 0 && tam_key_pending(&p) == 1);
+    assert(tam_key_feed(&p, "[201~", 5) == 5);
+    assert(tam_key_next(&p, &ev) == 1 && ev.type == TAM_KEY_PASTE_END);
+
+    /* SGR mouse reports. */
+    tam_key_init(&p);
+    const char *m = "\x1b[<0;10;5M\x1b[<0;10;5m\x1b[<64;3;4M\x1b[<65;3;4M"
+                    "\x1b[<35;7;8M\x1b[<18;1;2M\x1b[<34;2;2M";
+    assert(tam_key_feed(&p, m, 40) == 40);
+    assert(tam_key_next(&p, &ev) == 1 && ev.type == TAM_KEY_MOUSE);
+    assert(ev.button == TAM_MOUSE_LEFT && ev.col == 10 && ev.row == 5 && !ev.release && !ev.motion);
+    assert(tam_key_next(&p, &ev) == 1 && ev.button == TAM_MOUSE_LEFT && ev.release);
+    assert(tam_key_next(&p, &ev) == 1 && ev.button == TAM_MOUSE_WHEEL_UP && ev.col == 3 && ev.row == 4);
+    assert(tam_key_next(&p, &ev) == 1 && ev.button == TAM_MOUSE_WHEEL_DOWN);
+    assert(tam_key_feed(&p, m + 40, strlen(m) - 40) == (int)(strlen(m) - 40));
+    assert(tam_key_next(&p, &ev) == 1 && ev.button == TAM_MOUSE_NONE && ev.motion && ev.col == 7);
+    assert(tam_key_next(&p, &ev) == 1 && ev.button == TAM_MOUSE_RIGHT && ev.mods == TAM_MOD_CTRL);
+    assert(tam_key_next(&p, &ev) == 1 && ev.button == TAM_MOUSE_RIGHT && ev.motion);
+    assert(tam_key_next(&p, &ev) == 0);
+    /* A key event carries no stale mouse or paste fields. */
+    assert(tam_key_feed(&p, "k", 1) == 1);
+    assert(tam_key_next(&p, &ev) == 1 && ev.type == TAM_KEY_CHAR && ev.col == 0 && ev.text == NULL);
+    printf("  [PASS] test_paste_and_mouse\n");
+}
+
+/* name parses to exactly what tam_key decodes from bytes, and formats back
+ * to canon. */
+static void check_name(const char *name, const char *bytes, const char *canon)
+{
+    tam_key_event_t want, got;
+    assert(tam_key_name_parse(name, &want));
+    if (bytes != NULL) {
+        tam_key_parser_t p;
+        tam_key_init(&p);
+        assert(tam_key_feed(&p, bytes, strlen(bytes)) == (int)strlen(bytes));
+        assert(tam_key_next(&p, &got) == 1);
+        if (got.type != want.type || got.codepoint != want.codepoint || got.mods != want.mods) {
+            fprintf(stderr, "name %s: parsed %d/%u/%u, decoded %d/%u/%u\n", name,
+                    want.type, want.codepoint, want.mods, got.type, got.codepoint, got.mods);
+            abort();
+        }
+    }
+    char out[64];
+    size_t n = tam_key_name_format(&want, out, sizeof out);
+    if (strcmp(out, canon) != 0 || n != strlen(canon)) {
+        fprintf(stderr, "name %s formats as %s, not %s\n", name, out, canon);
+        abort();
+    }
+    tam_key_event_t again;
+    assert(tam_key_name_parse(out, &again));
+    assert(again.type == want.type && again.codepoint == want.codepoint && again.mods == want.mods);
+}
+
+static void test_key_names(void)
+{
+    check_name("Ctrl+S", "\x13", "Ctrl+S");
+    check_name("ctrl-s", "\x13", "Ctrl+S");
+    check_name("Alt+x", "\x1bx", "Alt+X");
+    check_name("Alt+Shift+A", "\x1b" "A", "Alt+Shift+A");
+    check_name("Shift+Alt+a", "\x1b" "A", "Alt+Shift+A");
+    check_name("A", "A", "Shift+A");
+    check_name("Shift+a", "A", "Shift+A");
+    check_name("a", "a", "a");
+    check_name("Shift+1", "!", "!");
+    check_name("Alt+Shift+1", "\x1b!", "Alt+!");
+    check_name("Ctrl+\\", "\x1c", "Ctrl+\\");
+    check_name("Ctrl+Space", NULL, "Ctrl+Space"); /* NUL, which strlen cannot pass */
+    check_name("Space", " ", "Space");
+    check_name("F5", "\x1b[15~", "F5");
+    check_name("Shift+F5", "\x1b[15;2~", "Shift+F5");
+    check_name("Ctrl+Up", "\x1b[1;5A", "Ctrl+Up");
+    check_name("PgUp", "\x1b[5~", "PageUp");
+    check_name("Shift+Tab", "\x1b[Z", "Shift+Tab");
+    check_name("Backtab", "\x1b[Z", "Shift+Tab");
+    check_name("Return", "\r", "Enter");
+    check_name("Esc", NULL, "Escape");
+    check_name("Ctrl++", NULL, "Ctrl++");
+    check_name("U+00E9", "\xc3\xa9", "U+00E9");
+    check_name("\xc3\xa9", "\xc3\xa9", "U+00E9");
+    check_name("Ctrl+Alt+Delete", "\x1b[3;7~", "Ctrl+Alt+Delete");
+    tam_key_event_t ev;
+    assert(!tam_key_name_parse("Meta+X", &ev));
+    assert(!tam_key_name_parse("Hyper+X", &ev));
+    assert(!tam_key_name_parse("F13", &ev));
+    assert(!tam_key_name_parse("", &ev));
+    assert(!tam_key_name_parse("Ctrl+", &ev) || (ev.codepoint == '+' && ev.mods == 0));
+    assert(!tam_key_name_parse("ab", &ev));
+    char small[4];
+    tam_key_event_t cs = { .type = TAM_KEY_CHAR, .codepoint = 's', .mods = TAM_MOD_CTRL };
+    assert(tam_key_name_format(&cs, small, sizeof small) == 6 && strcmp(small, "Ctr") == 0);
+    printf("  [PASS] test_key_names\n");
+}
+
+static void test_tty_modes(void)
+{
+    int slave;
+    int master = open_pty(&slave);
+    tam_tty_t t;
+    assert(tam_tty_open(&t, slave, slave) == 0);
+    struct termios before, now;
+    assert(tcgetattr(slave, &before) == 0);
+
+    /* cbreak keeps signals and output processing. */
+    assert(tam_tty_cbreak(&t, true) == 0);
+    assert(tcgetattr(slave, &now) == 0);
+    assert((now.c_lflag & (ICANON | ECHO)) == 0 && (now.c_lflag & ISIG) != 0);
+    assert((now.c_oflag & OPOST) != 0);
+    assert(tam_tty_raw(&t, true) == 0 && !t.cbreak);
+    assert(tcgetattr(slave, &now) == 0 && (now.c_lflag & ISIG) == 0);
+
+    /* Suspend turns everything off; resume brings back exactly that. */
+    char out[512];
+    drain_master(master, out, sizeof out);
+    assert(tam_tty_alt_screen(&t, true) == 0 && tam_tty_mouse(&t, true) == 0);
+    assert(tam_tty_paste(&t, true) == 0 && tam_tty_cursor_visible(&t, false) == 0);
+    drain_master(master, out, sizeof out);
+    assert(tam_tty_suspend(&t) == 0 && tam_tty_suspend(&t) == 0);
+    drain_master(master, out, sizeof out);
+    assert(strstr(out, "\x1b[?1049l") && strstr(out, "\x1b[?1000l") &&
+           strstr(out, "\x1b[?2004l") && strstr(out, "\x1b[?25h"));
+    assert(tcgetattr(slave, &now) == 0 && now.c_lflag == before.c_lflag);
+    assert(!t.raw && !t.alt_screen && !t.mouse_on && t.suspended);
+    assert(tam_tty_resume(&t) == 0 && tam_tty_resume(&t) == 0);
+    drain_master(master, out, sizeof out);
+    assert(strstr(out, "\x1b[?1049h") && strstr(out, "\x1b[?1000h") &&
+           strstr(out, "\x1b[?2004h") && strstr(out, "\x1b[?25l"));
+    assert(t.raw && t.alt_screen && t.mouse_on && t.paste_on && t.cursor_hidden);
+    assert(tcgetattr(slave, &now) == 0 && (now.c_lflag & ICANON) == 0);
+
+    /* Resize: the pipe wakes tam_tty_read with the new size in place. */
+    assert(tam_tty_watch_resize(&t) >= 0);
+    struct winsize ws = { .ws_row = 33, .ws_col = 101 };
+    assert(ioctl(master, TIOCSWINSZ, &ws) == 0);
+    raise(SIGWINCH);
+    char b;
+    assert(tam_tty_read(&t, &b, 1, 1000) == TAM_TTY_RESIZED);
+    assert(t.rows == 33 && t.cols == 101);
+    assert(!tam_tty_resized(&t));
+    assert(write(master, "y", 1) == 1);
+    assert(tam_tty_read(&t, &b, 1, 1000) == 1 && b == 'y');
+
+    tam_tty_close(&t);
+    struct sigaction cur;
+    assert(sigaction(SIGWINCH, NULL, &cur) == 0 && cur.sa_handler == SIG_DFL);
+    assert(tcgetattr(slave, &now) == 0 && now.c_lflag == before.c_lflag);
+    close(slave);
+    close(master);
+
+    /* Mouse reporting is not sent to a pipe. */
+    int fds[2];
+    assert(pipe(fds) == 0);
+    tam_tty_t pt;
+    tam_tty_open(&pt, fds[0], fds[1]);
+    assert(tam_tty_mouse(&pt, true) == 0 && pt.mouse_on);
+    close(fds[1]);
+    char none[8];
+    assert(read(fds[0], none, sizeof none) == 0);
+    /* End of input is told apart from an error. */
+    int eof[2];
+    assert(pipe(eof) == 0);
+    tam_tty_t et;
+    tam_tty_open(&et, eof[0], eof[1]);
+    close(eof[1]);
+    assert(tam_tty_read(&et, none, sizeof none, 100) == TAM_TTY_EOF);
+    close(eof[0]);
+    close(fds[0]);
+    printf("  [PASS] test_tty_modes\n");
+}
+
+static void test_tty_job_stop_and_restore(void)
+{
+    fflush(stdout); /* the children exit through stdio */
+    /* Ctrl+Z: the child stops with the terminal suspended, and resumes. */
+    int slave;
+    int master = open_pty(&slave);
+    pid_t pid = fork();
+    if (pid == 0) {
+        tam_tty_t t;
+        tam_tty_open(&t, slave, slave);
+        tam_tty_raw(&t, true);
+        tam_tty_alt_screen(&t, true);
+        tam_tty_job_stop(&t);
+        int ok = t.raw && t.alt_screen && !t.suspended;
+        tam_tty_close(&t);
+        _exit(ok ? 0 : 1);
+    }
+    int status;
+    assert(waitpid(pid, &status, WUNTRACED) == pid && WIFSTOPPED(status));
+    struct termios now;
+    assert(tcgetattr(slave, &now) == 0 && (now.c_lflag & ICANON) != 0);
+    char out[512];
+    drain_master(master, out, sizeof out);
+    assert(strstr(out, "\x1b[?1049l") != NULL);
+    kill(pid, SIGCONT);
+    assert(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    drain_master(master, out, sizeof out);
+    close(slave);
+    close(master);
+
+    /* A program killed in raw mode on the alternate screen, or one that
+     * crashes, leaves the terminal as it found it. (SIGSEGV is not tried:
+     * under AddressSanitizer its handler owns that signal, and
+     * tam_tty_install_restore leaves a handler it did not set alone.) */
+    static const int sigs[] = { SIGTERM, SIGILL, SIGABRT };
+    for (size_t i = 0; i < sizeof sigs / sizeof sigs[0]; i++) {
+        master = open_pty(&slave);
+        struct termios before;
+        assert(tcgetattr(slave, &before) == 0);
+        pid = fork();
+        if (pid == 0) {
+            tam_tty_t t;
+            tam_tty_open(&t, slave, slave);
+            tam_tty_raw(&t, true);
+            tam_tty_alt_screen(&t, true);
+            tam_tty_mouse(&t, true);
+            tam_tty_cursor_visible(&t, false);
+            tam_tty_install_restore(&t);
+            raise(sigs[i]);
+            _exit(99);
+        }
+        assert(waitpid(pid, &status, 0) == pid);
+        assert(WIFSIGNALED(status) && WTERMSIG(status) == sigs[i]);
+        assert(tcgetattr(slave, &now) == 0);
+        assert(now.c_lflag == before.c_lflag && now.c_iflag == before.c_iflag);
+        drain_master(master, out, sizeof out);
+        const char *alt_off = strstr(out, "\x1b[?1049l");
+        assert(alt_off && strstr(out, "\x1b[?1000l") && strstr(out, "\x1b[?25h"));
+        close(slave);
+        close(master);
+    }
+
+    /* Exiting without tam_tty_close restores too; a program's own handler
+     * is left alone. */
+    master = open_pty(&slave);
+    pid = fork();
+    if (pid == 0) {
+        signal(SIGHUP, SIG_IGN);
+        tam_tty_t t;
+        tam_tty_open(&t, slave, slave);
+        tam_tty_raw(&t, true);
+        tam_tty_install_restore(&t);
+        struct sigaction cur;
+        sigaction(SIGHUP, NULL, &cur);
+        exit(cur.sa_handler == SIG_IGN ? 0 : 1);
+    }
+    assert(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    assert(tcgetattr(slave, &now) == 0 && (now.c_lflag & ICANON) != 0);
+    close(slave);
+    close(master);
+    printf("  [PASS] test_tty_job_stop_and_restore\n");
+}
+
 int main(void)
 {
     /* tam_uni_width depends on the locale's character tables. */
@@ -413,6 +760,10 @@ int main(void)
     test_tty_raw();
     test_tty_capabilities();
     test_pager_primitives();
+    test_paste_and_mouse();
+    test_key_names();
+    test_tty_modes();
+    test_tty_job_stop_and_restore();
     printf("terminal tests passed\n");
     return 0;
 }

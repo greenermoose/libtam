@@ -39,8 +39,8 @@ Each version lands on his acceptance.
   convention).
 - **0.11.0 (done 2026-11-26):** process, I/O, socket, time, base64 and
   locale primitives.
-- **0.12.0:** terminal suspend/resume, crash restore, paste and mouse
-  events, key names.
+- **0.12.0 (done 2026-11-26):** terminal suspend/resume, crash restore,
+  paste and mouse events, key names.
 - **0.13.0:** `libtam-render.a`, holding tam-view's renderer, then the
   consumer migrations.
 

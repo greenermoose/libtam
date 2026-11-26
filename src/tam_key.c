@@ -1,7 +1,11 @@
 #include "tam_key.h"
 #include "tam_uni.h"
 
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 static void consume(tam_key_parser_t *p, size_t n)
 {
@@ -209,6 +213,59 @@ static int ss3_event(unsigned char final, tam_key_event_t *ev)
     }
 }
 
+/* SGR mouse report parameters "b;col;row" (after "ESC [ <"). */
+static int mouse_event(const unsigned char *s, size_t n, bool release,
+                       tam_key_event_t *ev)
+{
+    int params[3];
+    if (parse_params(s, n, params, 3) != 3) return -1;
+    int b = params[0];
+    ev->type = TAM_KEY_MOUSE;
+    ev->mods = ((b & 4) ? TAM_MOD_SHIFT : 0) | ((b & 8) ? TAM_MOD_ALT : 0) |
+               ((b & 16) ? TAM_MOD_CTRL : 0);
+    ev->motion = (b & 32) != 0;
+    int base = b & ~(4 | 8 | 16 | 32);
+    if (base >= 64 && base < 128) ev->button = TAM_MOUSE_WHEEL_UP + (base & 3);
+    else if (base < 64) ev->button = base & 3;
+    else ev->button = TAM_MOUSE_NONE; /* extra buttons are not reported */
+    ev->col = params[1];
+    ev->row = params[2];
+    ev->release = release;
+    return 1;
+}
+
+static const char paste_end[] = "\x1b[201~";
+#define PASTE_END_LEN (sizeof(paste_end) - 1)
+
+/* In a bracketed paste: hand out the bytes up to the end marker, holding
+ * back a tail that may be the start of the marker. */
+static int paste_next(tam_key_parser_t *p, tam_key_event_t *ev)
+{
+    size_t emit = p->len;
+    for (size_t k = 0; k < p->len; k++) {
+        if (p->buf[k] != 0x1B) continue;
+        size_t left = p->len - k;
+        size_t cmp = left < PASTE_END_LEN ? left : PASTE_END_LEN;
+        if (memcmp(p->buf + k, paste_end, cmp) == 0) {
+            emit = k;
+            break;
+        }
+    }
+    if (emit == 0) {
+        if (p->len < PASTE_END_LEN) return 0; /* the marker is still arriving */
+        consume(p, PASTE_END_LEN);
+        p->in_paste = false;
+        ev->type = TAM_KEY_PASTE_END;
+        return 1;
+    }
+    memcpy(p->paste, p->buf, emit);
+    consume(p, emit);
+    ev->type = TAM_KEY_PASTE;
+    ev->text = p->paste;
+    ev->len = emit;
+    return 1;
+}
+
 /* Parse a sequence beginning with ESC. Returns 1 with an event, 0 when more
  * bytes are needed, and -1 when an unsupported sequence was consumed. */
 static int escape_event(tam_key_parser_t *p, tam_key_event_t *ev)
@@ -241,6 +298,18 @@ static int escape_event(tam_key_parser_t *p, tam_key_event_t *ev)
                 return 1;
             }
             return 0;
+        }
+
+        if (i > 2 && p->buf[2] == '<' && (p->buf[i] == 'M' || p->buf[i] == 'm')) {
+            int result = mouse_event(p->buf + 3, i - 3, p->buf[i] == 'm', ev);
+            consume(p, i + 1);
+            return result > 0 ? 1 : -1;
+        }
+        if (p->buf[i] == '~' && i == 5 && memcmp(p->buf + 2, "200", 3) == 0) {
+            consume(p, i + 1);
+            p->in_paste = true;
+            ev->type = TAM_KEY_PASTE_BEGIN;
+            return 1;
         }
 
         int result = csi_event(p->buf + 2, i - 2, p->buf[i], ev);
@@ -278,9 +347,11 @@ static int escape_event(tam_key_parser_t *p, tam_key_event_t *ev)
 int tam_key_next(tam_key_parser_t *p, tam_key_event_t *ev)
 {
     if (p == NULL || ev == NULL) return -1;
+    memset(ev, 0, sizeof(*ev));
 
     for (;;) {
         if (p->len == 0) return 0;
+        if (p->in_paste) return paste_next(p, ev);
 
         if (p->buf[0] == 0x1B) {
             int result = escape_event(p, ev);
@@ -311,6 +382,9 @@ int tam_key_next(tam_key_parser_t *p, tam_key_event_t *ev)
 int tam_key_timeout(tam_key_parser_t *p, tam_key_event_t *ev)
 {
     if (p == NULL || ev == NULL) return 0;
+    memset(ev, 0, sizeof(*ev));
+    /* In a paste a pending ESC may start the end marker; keep waiting. */
+    if (p->in_paste) return 0;
     if (p->len == 1 && p->buf[0] == 0x1B) {
         ev->type = TAM_KEY_ESC;
         ev->codepoint = 0;
@@ -319,4 +393,166 @@ int tam_key_timeout(tam_key_parser_t *p, tam_key_event_t *ev)
         return 1;
     }
     return 0;
+}
+
+/* ---- Key names ---------------------------------------------------------- */
+
+static const struct {
+    const char    *name;
+    tam_key_type_t type;
+    uint32_t       cp;
+    unsigned       mods;
+} key_names[] = {
+    /* The first name of a key is the one tam_key_name_format writes. */
+    {"Up", TAM_KEY_UP, 0, 0},           {"Down", TAM_KEY_DOWN, 0, 0},
+    {"Left", TAM_KEY_LEFT, 0, 0},       {"Right", TAM_KEY_RIGHT, 0, 0},
+    {"Home", TAM_KEY_HOME, 0, 0},       {"End", TAM_KEY_END, 0, 0},
+    {"PageUp", TAM_KEY_PAGE_UP, 0, 0},  {"PgUp", TAM_KEY_PAGE_UP, 0, 0},
+    {"PageDown", TAM_KEY_PAGE_DOWN, 0, 0}, {"PgDn", TAM_KEY_PAGE_DOWN, 0, 0},
+    {"Enter", TAM_KEY_ENTER, 0, 0},     {"Return", TAM_KEY_ENTER, 0, 0},
+    {"Tab", TAM_KEY_TAB, 0, 0},         {"Backtab", TAM_KEY_TAB, 0, TAM_MOD_SHIFT},
+    {"Backspace", TAM_KEY_BACKSPACE, 0, 0},
+    {"Insert", TAM_KEY_INSERT, 0, 0},   {"Ins", TAM_KEY_INSERT, 0, 0},
+    {"Delete", TAM_KEY_DELETE, 0, 0},   {"Del", TAM_KEY_DELETE, 0, 0},
+    {"Escape", TAM_KEY_ESC, 0, 0},      {"Esc", TAM_KEY_ESC, 0, 0},
+    {"Space", TAM_KEY_CHAR, ' ', 0},
+};
+
+static const char us_plain[] = "`1234567890-=[]\\;',./";
+static const char us_shifted[] = "~!@#$%^&*()_+{}|:\"<>?";
+
+bool tam_key_name_parse(const char *name, tam_key_event_t *ev)
+{
+    if (name == NULL || ev == NULL) return false;
+    while (*name == ' ' || *name == '\t') name++;
+    size_t len = strlen(name);
+    while (len > 0 && (name[len - 1] == ' ' || name[len - 1] == '\t')) len--;
+    if (len == 0 || len >= 64) return false;
+    char buf[64];
+    memcpy(buf, name, len);
+    buf[len] = '\0';
+
+    unsigned mods = 0;
+    const char *p = buf;
+    for (;;) {
+        static const struct { const char *word; size_t n; unsigned mod; } mod_words[] = {
+            {"ctrl", 4, TAM_MOD_CTRL}, {"alt", 3, TAM_MOD_ALT},
+            {"shift", 5, TAM_MOD_SHIFT}, {"meta", 4, 0},
+        };
+        bool matched = false;
+        for (size_t i = 0; i < sizeof(mod_words) / sizeof(mod_words[0]); i++) {
+            size_t n = mod_words[i].n;
+            if (strncasecmp(p, mod_words[i].word, n) == 0 &&
+                (p[n] == '+' || p[n] == '-') && p[n + 1] != '\0') {
+                if (mod_words[i].mod == 0) return false; /* Meta */
+                mods |= mod_words[i].mod;
+                p += n + 1;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) break;
+    }
+
+    memset(ev, 0, sizeof(*ev));
+    for (size_t i = 0; i < sizeof(key_names) / sizeof(key_names[0]); i++) {
+        if (strcasecmp(p, key_names[i].name) == 0) {
+            ev->type = key_names[i].type;
+            ev->codepoint = key_names[i].cp;
+            ev->mods = mods | key_names[i].mods;
+            return true;
+        }
+    }
+    if ((p[0] == 'F' || p[0] == 'f') && isdigit((unsigned char)p[1])) {
+        char *end = NULL;
+        long n = strtol(p + 1, &end, 10);
+        if (*end != '\0' || n < 1 || n > 12) return false;
+        ev->type = (tam_key_type_t)(TAM_KEY_F1 + (n - 1));
+        ev->mods = mods;
+        return true;
+    }
+
+    uint32_t cp;
+    if ((p[0] == 'U' || p[0] == 'u') && p[1] == '+' && isxdigit((unsigned char)p[2])) {
+        char *end = NULL;
+        unsigned long v = strtoul(p + 2, &end, 16);
+        if (*end != '\0' || v > 0x10FFFF) return false;
+        cp = (uint32_t)v;
+    } else {
+        size_t plen = strlen(p);
+        size_t used = tam_utf8_decode(p, plen, &cp);
+        if (used != plen || (cp == 0xFFFD && used == 1 && (unsigned char)p[0] >= 0x80))
+            return false;
+    }
+    if (cp < 0x20 || cp == 0x7F) return false;
+
+    ev->type = TAM_KEY_CHAR;
+    if (cp < 0x80) {
+        const char *at;
+        if (mods & (TAM_MOD_CTRL | TAM_MOD_ALT)) {
+            /* With Ctrl or Alt a letter's case is not significant; Shift is
+             * spelled out. Alt+Shift+letter arrives as the capital. */
+            if (cp >= 'A' && cp <= 'Z') cp = cp - 'A' + 'a';
+            if ((mods & TAM_MOD_SHIFT) && !(mods & TAM_MOD_CTRL)) {
+                at = strchr(us_plain, (int)cp);
+                if (cp >= 'a' && cp <= 'z') cp = cp - 'a' + 'A';
+                else if (at != NULL && cp != 0) cp = (unsigned char)us_shifted[at - us_plain];
+                mods &= ~(unsigned)TAM_MOD_SHIFT;
+            }
+            if ((mods & TAM_MOD_CTRL) && cp == '\\') cp = '|'; /* 0x1C */
+        } else if (mods & TAM_MOD_SHIFT) {
+            at = strchr(us_plain, (int)cp);
+            if (cp >= 'a' && cp <= 'z') cp = cp - 'a' + 'A';
+            else if (at != NULL && cp != 0) cp = (unsigned char)us_shifted[at - us_plain];
+            mods &= ~(unsigned)TAM_MOD_SHIFT;
+        }
+    }
+    ev->codepoint = cp;
+    ev->mods = mods;
+    return true;
+}
+
+size_t tam_key_name_format(const tam_key_event_t *ev, char *buf, size_t size)
+{
+    char name[24] = "";
+    unsigned mods = ev ? ev->mods : 0;
+    const char *kname = NULL;
+    if (ev == NULL) {
+        kname = "Unknown";
+    } else if (ev->type == TAM_KEY_CHAR) {
+        uint32_t cp = ev->codepoint;
+        if (cp == ' ') {
+            kname = "Space";
+        } else if (cp >= 'A' && cp <= 'Z') {
+            /* A capital is Shift+letter. */
+            mods |= TAM_MOD_SHIFT;
+            snprintf(name, sizeof name, "%c", (char)cp);
+        } else if (cp >= 'a' && cp <= 'z') {
+            snprintf(name, sizeof name, "%c", (char)(mods ? cp - 'a' + 'A' : cp));
+        } else if ((mods & TAM_MOD_CTRL) && cp == '|') {
+            snprintf(name, sizeof name, "\\");
+        } else if (cp > 0x20 && cp < 0x7F) {
+            snprintf(name, sizeof name, "%c", (char)cp);
+        } else {
+            snprintf(name, sizeof name, "U+%04X", (unsigned)cp);
+        }
+        if (kname == NULL) kname = name;
+    } else if (ev->type >= TAM_KEY_F1 && ev->type <= TAM_KEY_F12) {
+        snprintf(name, sizeof name, "F%d", (int)(ev->type - TAM_KEY_F1 + 1));
+        kname = name;
+    } else {
+        for (size_t i = 0; i < sizeof(key_names) / sizeof(key_names[0]); i++) {
+            if (key_names[i].type == ev->type && key_names[i].cp == 0 &&
+                key_names[i].mods == 0) {
+                kname = key_names[i].name;
+                break;
+            }
+        }
+        if (kname == NULL) kname = "Unknown";
+    }
+    int n = snprintf(buf, size, "%s%s%s%s",
+                     (mods & TAM_MOD_CTRL) ? "Ctrl+" : "",
+                     (mods & TAM_MOD_ALT) ? "Alt+" : "",
+                     (mods & TAM_MOD_SHIFT) ? "Shift+" : "", kname);
+    return n < 0 ? 0 : (size_t)n;
 }

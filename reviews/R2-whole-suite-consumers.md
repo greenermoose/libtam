@@ -196,7 +196,7 @@ Consumer bugs found along the way are listed at the end.
 - **Fix:** Add the `tam_proc`, `tam_io`, `tam_time`, `tam_sock` and
   `tam_b64` modules, and extend `tam_path`, `tam_uni`, `tam_tty`,
   `tam_key` and `tam_cultivar` (P1 Phases 2 and 3).
-- **Status:** primitives added in 0.11.0; the consumers' own copies go in
+- **Status:** primitives added in 0.11.0 and 0.12.0; the consumers' own copies go in
   the P1 migrations
 
 ### 9. tam-view's renderer is copied verbatim into tam-knox (medium)
@@ -268,7 +268,8 @@ the migration slices in P1 fix them while replacing the local code.
     (`passcode_store.c:254`).
 - **tam-knox:**
   - Pasted text arrives as commands: bracketed paste is enabled but not
-    handled.
+    handled. (Since libtam 0.12.0 it arrives as paste events, which
+    tam-knox ignores, so it no longer runs as commands.)
   - Its non-terminal check never fires (`workbench.c:3238`).
   - A SIGTERM or SIGHUP leaves the terminal raw.
   - Alt+Shift bindings never match (`keymap.c:189-200,407-412`).

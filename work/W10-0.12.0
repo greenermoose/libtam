@@ -1,0 +1,47 @@
+W10 0.12.0: TERMINAL STACK
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W9
+
+
+GUIDANCE
+
+  Fred: "Do 0.12.0"
+
+
+DONE
+
+  - tam_tty: cbreak; suspend, resume and job_stop (Ctrl+Z); a resize
+    pipe (watch_resize, resized, TAM_TTY_RESIZED from read); TAM_TTY_EOF;
+    mouse reporting only to a terminal; install_restore and restore_now.
+  - The crash restore reads a static snapshot that every mode change on
+    the registered terminal keeps current, so it works after main has
+    returned or the caller's struct is gone. It only takes signals left
+    at their default action, then lets each go on to that action.
+  - tam_key: paste events (BEGIN, PASTE chunks, END; the end marker may
+    arrive split; an ESC timeout never fires inside a paste), SGR mouse
+    events, and tam_key_name_parse/format.
+  - Tests on ptys: cbreak flags, suspend/resume sequences and termios,
+    resize, EOF on a pipe, a child stopped by job_stop and continued,
+    children killed by SIGTERM, SIGILL and SIGABRT and one that exits
+    without close all leave the terminal as found. Key names round-trip
+    and match what tam_key decodes from the same keys' bytes.
+  - SIGSEGV restore checked outside the sanitizer build (ASan owns that
+    signal there): the process still dies with signal 11, terminal
+    restored.
+  - Every consumer builds and passes its tests; tam-edit 1.1.2 switched
+    two positional initialisers to designated ones.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - P1 0.13.0 (libtam-render.a) is next, then the migrations, which
+    replace the programs' own suspend, restore, paste, mouse and key
+    name code with these.

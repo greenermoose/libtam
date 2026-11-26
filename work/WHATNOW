@@ -3,12 +3,12 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W16
+Updated: 2026-11-26, with W17
 
 
 STATE
 
-  Version 0.15.0 on branch dev (the VERSION file is the version's source
+  Version 0.15.1 on branch dev (the VERSION file is the version's source
   of truth). Follows the tam-idol 0.2.0 standard (W3). Three static
   archives by default: libtam.a, the core, which needs only libc;
   libtam-render.a, the document renderers, which needs libtam.a; and
@@ -29,7 +29,8 @@ STATE
   program that links libtam now uses it (P1 done). W14 released 0.14.1:
   tam_tty_job_stop pauses a session leader. W15 released 0.14.2:
   tam_exec sleeps on a pidfd instead of checking every 5 ms. W16
-  released 0.15.0: tam.h sets no feature macros.
+  released 0.15.0: tam.h sets no feature macros. W17 released 0.15.1:
+  libtam builds as C17.
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
@@ -88,6 +89,7 @@ WATCH OUT
     module or function, patch for a fix. Consumers build against the
     exact libtam they were tested with. A Makefile-only install-location
     change does not bump VERSION: the library itself is unchanged.
+  - libtam is C17 (-std=c17 -D_GNU_SOURCE in the Makefile, 0.15.1).
   - tam.h sets no feature macros (0.15.0). A public header must compile
     on its own under strict C11 (tests/check-headers.sh, run by make
     test); tam_tty.h alone needs POSIX and says so.

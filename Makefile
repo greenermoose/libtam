@@ -12,9 +12,9 @@ CFLAGS ?= -O2 -Wall -Wextra -Wpedantic
 # Debug information names source files relative to the source tree, not
 # the directory it was built in, so builds in different places are identical.
 override CFLAGS += -g -fPIC -Iinclude -ffile-prefix-map=$(CURDIR)=.
-# libtam's own sources use Linux and GNU interfaces. The public headers set
-# no feature macros: programs choose theirs (tests/check-headers.sh).
-override CFLAGS += -D_GNU_SOURCE
+# libtam is C17 with Linux and GNU interfaces. The public headers set no
+# feature macros: programs choose theirs (tests/check-headers.sh).
+override CFLAGS += -std=c17 -D_GNU_SOURCE
 # Development installs default to $(HOME)/.local so they need no root;
 # /usr/local is retired on Tamlinux. An explicit PREFIX still wins.
 PREFIX ?= $(HOME)/.local

@@ -52,6 +52,8 @@ Each version lands on his acceptance.
 - **0.15.0 (done 2026-11-26):** `tam.h` sets no feature macros; every
   program sets its own, and `tests/check-headers.sh` compiles each public
   header on its own.
+- **0.15.1 (done 2026-11-26):** libtam builds as C17 (`-std=c17`); it had
+  no standard set and built as the compiler's default (gnu23 on GCC 16).
 - **Consumer migrations (done 2026-11-26):** every program that links
   libtam moved onto it, one commit each.
 

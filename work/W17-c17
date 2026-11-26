@@ -1,0 +1,35 @@
+W17 0.15.1: BUILD AS C17
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W16
+
+
+GUIDANCE
+
+  Fred: "Help opencode update our code from C11 to C17." opencode, which
+  coordinates the change, asked Claude to set libtam's standard.
+
+
+DONE
+
+  - The Makefile set no -std, so libtam built as the compiler's default
+    (gnu23 on GCC 16). It now sets -std=c17 beside -D_GNU_SOURCE.
+  - The sources compile as C17 with -Wpedantic and no warnings, so they
+    use no C23-only features. Compared with the gnu23 build, 31 of 36
+    objects have identical machine code; five differ in GCC's code
+    generation only (stack layout, and strcpy no longer rewritten to
+    stpcpy, which C17 does not include).
+  - make test (ASan and UBSan, header checks) and make test-display
+    test-session pass. tests/check-headers.sh moved to C17 in a70b0c0.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - Nothing pending.

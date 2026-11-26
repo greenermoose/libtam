@@ -249,8 +249,8 @@ Consumer bugs found along the way are listed at the end.
   - Make the archive a link prerequisite.
   - Reconcile tam's pin.
 - **Status:** 0.9.2 names the hardening; tam-edit, tam-knox, tam-data,
-  tamlinux-tools require 0.10.0; tam, the tamlinux command floors and
-  tam's pin remain
+  tamlinux-tools and tam require 0.10.0, and tam's source-build pin
+  is 0.10.0; the tamlinux command floors remain
 
 ## Consumer bugs found along the way
 

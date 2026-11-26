@@ -31,9 +31,8 @@ DONE
   - make test, test-display and test-session pass. Installed to
     ~/.local.
   - Migrated tam-edit, tam-knox, tam-data, tamlinux-tools, start and
-    tam-boot; each builds and passes its tests against 0.10.0. tam is
-    migrated and tested in its working tree; its commit waits for the
-    ROADMAP.md and development.md handoff from another session.
+    tam-boot; each builds and passes its tests against 0.10.0. tam
+    (command 0.69.8) followed after a handoff of its version files.
 
 
 FAILED

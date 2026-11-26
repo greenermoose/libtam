@@ -44,22 +44,27 @@ static inline void tam__child_default_signals(void) {
 }
 
 /* In a forked child: close every descriptor from `first` up except `keep`
- * (-1 for none), so the program holds none of the parent's files. */
-static inline void tam__child_close_from(int first, int keep) {
+ * and `keep2` (-1 for none), so the program holds none of the parent's
+ * files. */
+static inline void tam__child_close_from(int first, int keep, int keep2) {
+    int a = keep < first ? -1 : keep, b = keep2 < first ? -1 : keep2;
+    if (a > b) { int t = a; a = b; b = t; }
+    if (a == b) a = -1;
 #ifdef SYS_close_range
-    int ok = 1;
-    if (keep >= first) {
-        if (keep > first && syscall(SYS_close_range, first, keep - 1, 0) != 0) ok = 0;
-        if (ok && syscall(SYS_close_range, keep + 1, ~0U, 0) != 0) ok = 0;
-    } else if (syscall(SYS_close_range, first, ~0U, 0) != 0) {
-        ok = 0;
+    int ok = 1, from = first;
+    int stops[2] = { a, b };
+    for (int i = 0; i < 2 && ok; i++) {
+        if (stops[i] < 0) continue;
+        if (stops[i] > from && syscall(SYS_close_range, from, stops[i] - 1, 0) != 0) ok = 0;
+        from = stops[i] + 1;
     }
+    if (ok && syscall(SYS_close_range, from, ~0U, 0) != 0) ok = 0;
     if (ok) return;
 #endif
     long max = sysconf(_SC_OPEN_MAX);
     if (max < 0 || max > 65536) max = 65536;
     for (int fd = first; fd < max; fd++)
-        if (fd != keep) (void)close(fd);
+        if (fd != a && fd != b) (void)close(fd);
 }
 
 /* In a forked child: send errno through the close-on-exec report pipe and

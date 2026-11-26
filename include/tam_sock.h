@@ -38,7 +38,9 @@ int tam_sock_connect(const char *path, int timeout_ms);
  * stay unread. Returns the line's length. At end of stream, a partial line
  * is returned as it is; with nothing read, -1 with errno ENODATA. Otherwise
  * -1 with errno: ETIMEDOUT, EMSGSIZE when the line does not fit in `size`
- * (the bytes read are discarded), or the read error. */
+ * (the bytes read are discarded), or the read error. Safe for secrets: the
+ * function's own copy of the bytes is wiped before it returns, and so is
+ * buf when it fails. */
 ssize_t tam_sock_read_line(int fd, char *buf, size_t size, int timeout_ms);
 
 #ifdef __cplusplus

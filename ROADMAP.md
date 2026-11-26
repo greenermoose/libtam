@@ -42,7 +42,10 @@ Each version lands on his acceptance.
 - **0.12.0 (done 2026-11-26):** terminal suspend/resume, crash restore,
   paste and mouse events, key names.
 - **0.13.0 (done 2026-11-26):** `libtam-render.a`, holding tam-view's
-  renderer. The consumer migrations follow.
+  renderer.
+- **0.14.0 (done 2026-11-26):** process options (stdin, kept output, a
+  kept descriptor, environment) and a socket reader safe for secrets, for
+  the consumer migrations, which follow.
 
 ## Queued requests (on Fred's word)
 

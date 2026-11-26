@@ -50,19 +50,87 @@ char *tam_which(const char *name)
     return NULL;
 }
 
+extern char **environ;
+
+/* What the child needs to exec, prepared in the parent so nothing unsafe
+ * runs after fork: the program's path when an environment is given, and
+ * the environment itself. */
+typedef struct {
+    char  *path;   /* resolved program, or NULL to use execvp */
+    char **envp;   /* NULL: inherit environ */
+} exec_plan_t;
+
+static void plan_free(exec_plan_t *pl)
+{
+    free(pl->path);
+    free(pl->envp);
+}
+
+static int plan_make(exec_plan_t *pl, const char *const argv[], const tam_proc_opts_t *opts)
+{
+    pl->path = NULL;
+    pl->envp = NULL;
+    if (opts == NULL || opts->env == NULL) return 0;
+    pl->path = tam_which(argv[0]);
+    if (pl->path == NULL) return -1;
+    size_t base = 0, add = 0;
+    while (environ != NULL && environ[base] != NULL) base++;
+    while (opts->env[add] != NULL) add++;
+    pl->envp = calloc(base + add + 1, sizeof(char *));
+    if (pl->envp == NULL) {
+        plan_free(pl);
+        errno = ENOMEM;
+        return -1;
+    }
+    size_t n = 0;
+    for (size_t i = 0; i < base; i++) {
+        const char *eq = strchr(environ[i], '=');
+        size_t klen = eq ? (size_t)(eq - environ[i]) : strlen(environ[i]);
+        bool replaced = false;
+        for (size_t j = 0; j < add && !replaced; j++)
+            replaced = strncmp(opts->env[j], environ[i], klen) == 0 && opts->env[j][klen] == '=';
+        if (!replaced) pl->envp[n++] = environ[i];
+    }
+    for (size_t j = 0; j < add; j++) pl->envp[n++] = (char *)opts->env[j];
+    pl->envp[n] = NULL;
+    return 0;
+}
+
+static void plan_exec(const exec_plan_t *pl, const char *const argv[])
+{
+    if (pl->envp != NULL) execve(pl->path, (char *const *)argv, pl->envp);
+    else execvp(argv[0], (char *const *)argv);
+}
+
 int tam_spawn_detached(const char *const argv[])
+{
+    return tam_spawn_detached_opts(argv, NULL);
+}
+
+int tam_spawn_detached_opts(const char *const argv[], const tam_proc_opts_t *opts)
 {
     if (argv == NULL || argv[0] == NULL) {
         errno = EINVAL;
         return -1;
     }
+    int stdin_fd = opts && opts->stdin_fd > 0 ? opts->stdin_fd : -1;
+    bool keep_stdio = opts && opts->keep_stdio;
+    int keep_fd = opts && opts->keep_fd > STDERR_FILENO ? opts->keep_fd : -1;
+    exec_plan_t plan;
+    if (plan_make(&plan, argv, opts) < 0) return -1;
     int report[2];
-    if (pipe2(report, O_CLOEXEC) < 0) return -1;
+    if (pipe2(report, O_CLOEXEC) < 0) {
+        int err = errno;
+        plan_free(&plan);
+        errno = err;
+        return -1;
+    }
     pid_t pid = fork();
     if (pid < 0) {
         int err = errno;
         close(report[0]);
         close(report[1]);
+        plan_free(&plan);
         errno = err;
         return -1;
     }
@@ -76,16 +144,24 @@ int tam_spawn_detached(const char *const argv[])
         if (setsid() < 0) tam__child_fail(report[1], errno);
         int null_fd = open("/dev/null", O_RDWR);
         if (null_fd >= 0) {
-            (void)dup2(null_fd, STDIN_FILENO);
-            (void)dup2(null_fd, STDOUT_FILENO);
-            (void)dup2(null_fd, STDERR_FILENO);
+            (void)dup2(stdin_fd >= 0 ? stdin_fd : null_fd, STDIN_FILENO);
+            if (!keep_stdio) {
+                (void)dup2(null_fd, STDOUT_FILENO);
+                (void)dup2(null_fd, STDERR_FILENO);
+            }
             if (null_fd > STDERR_FILENO) close(null_fd);
         }
-        tam__child_close_from(STDERR_FILENO + 1, report[1]);
+        if (keep_fd >= 0) {
+            int fl = fcntl(keep_fd, F_GETFD);
+            if (fl < 0 || fcntl(keep_fd, F_SETFD, fl & ~FD_CLOEXEC) < 0)
+                tam__child_fail(report[1], errno);
+        }
+        tam__child_close_from(STDERR_FILENO + 1, report[1], keep_fd);
         tam__child_default_signals();
-        execvp(argv[0], (char *const *)argv);
+        plan_exec(&plan, argv);
         tam__child_fail(report[1], errno);
     }
+    plan_free(&plan);
     close(report[1]);
     int child_error = 0;
     ssize_t count;
@@ -116,12 +192,26 @@ int tam_spawn_detached(const char *const argv[])
 
 int tam_run_foreground(const char *const argv[], int *exit_code)
 {
+    return tam_run_foreground_opts(argv, NULL, exit_code);
+}
+
+int tam_run_foreground_opts(const char *const argv[], const tam_proc_opts_t *opts,
+                            int *exit_code)
+{
     if (argv == NULL || argv[0] == NULL) {
         errno = EINVAL;
         return -1;
     }
+    int stdin_fd = opts && opts->stdin_fd > 0 ? opts->stdin_fd : -1;
+    exec_plan_t plan;
+    if (plan_make(&plan, argv, opts) < 0) return -1;
     int report[2];
-    if (pipe2(report, O_CLOEXEC) < 0) return -1;
+    if (pipe2(report, O_CLOEXEC) < 0) {
+        int err = errno;
+        plan_free(&plan);
+        errno = err;
+        return -1;
+    }
 
     struct sigaction ign, old_int, old_quit;
     memset(&ign, 0, sizeof(ign));
@@ -133,11 +223,14 @@ int tam_run_foreground(const char *const argv[], int *exit_code)
     pid_t pid = fork();
     if (pid == 0) {
         close(report[0]);
+        if (stdin_fd >= 0 && dup2(stdin_fd, STDIN_FILENO) < 0)
+            tam__child_fail(report[1], errno);
         tam__child_default_signals();
-        execvp(argv[0], (char *const *)argv);
+        plan_exec(&plan, argv);
         tam__child_fail(report[1], errno);
     }
     int fork_error = errno;
+    plan_free(&plan);
     close(report[1]);
     int err = 0;
     if (pid < 0) {

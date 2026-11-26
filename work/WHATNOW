@@ -3,12 +3,12 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W11
+Updated: 2026-11-26, with W12
 
 
 STATE
 
-  Version 0.13.0 on branch dev (the VERSION file is the version's source
+  Version 0.14.0 on branch dev (the VERSION file is the version's source
   of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
   archives by default: libtam.a, the core, which needs only libc, and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
@@ -22,7 +22,9 @@ STATE
   W9 released 0.11.0, the shared primitives (tam_proc, tam_io, tam_sock,
   tam_b64 and the path, UTF-8, guard and JSON additions). W10 released
   0.12.0, the terminal stack. W11 released 0.13.0: libtam-render.a,
-  holding tam-view's renderer, now shared by tam-view and tam-knox.
+  holding tam-view's renderer, now shared by tam-view and tam-knox. W12
+  released 0.14.0: process options and a secret-safe socket line reader,
+  which the migrations need.
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the

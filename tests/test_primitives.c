@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <pty.h>
 #include <signal.h>
 #include <stdio.h>
@@ -192,6 +193,69 @@ static void test_spawn(void)
     printf("  [PASS] test_spawn\n");
 }
 
+static void test_proc_opts(void)
+{
+    /* keep_stdio: the detached program's output reaches our stdout pipe. */
+    int out[2];
+    assert(pipe(out) == 0);
+    int saved_out = dup(STDOUT_FILENO);
+    assert(dup2(out[1], STDOUT_FILENO) == STDOUT_FILENO);
+    tam_proc_opts_t keep = { .keep_stdio = true };
+    const char *echo[] = {"sh", "-c", "echo kept", NULL};
+    assert(tam_spawn_detached_opts(echo, &keep) == 0);
+    assert(dup2(saved_out, STDOUT_FILENO) == STDOUT_FILENO);
+    close(saved_out);
+    close(out[1]);
+    char got[64] = {0};
+    size_t n = 0;
+    for (int i = 0; i < 200 && n == 0; i++) {
+        struct pollfd pfd = { out[0], POLLIN, 0 };
+        if (poll(&pfd, 1, 10) > 0) n = (size_t)read(out[0], got, sizeof got - 1);
+    }
+    assert(n > 0 && strncmp(got, "kept", 4) == 0);
+    close(out[0]);
+
+    /* keep_fd and env: the program sees the descriptor and the variable,
+     * as a Wayland client sees WAYLAND_SOCKET. */
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) == 0);
+    char envbuf[64];
+    snprintf(envbuf, sizeof envbuf, "TAM_TEST_FD=%d", sv[1]);
+    const char *env[] = { envbuf, "TAM_TEST_REPLACED=new", NULL };
+    setenv("TAM_TEST_REPLACED", "old", 1);
+    tam_proc_opts_t pass = { .keep_fd = sv[1], .env = env };
+    const char *say[] = {"sh", "-c",
+        "printf '%s %s' \"$TAM_TEST_REPLACED\" ok >&$TAM_TEST_FD", NULL};
+    assert(tam_spawn_detached_opts(say, &pass) == 0);
+    close(sv[1]);
+    char line[64];
+    ssize_t r = tam_sock_read_line(sv[0], line, sizeof line, 2000);
+    assert(r == 6 && strcmp(line, "new ok") == 0);
+    close(sv[0]);
+    unsetenv("TAM_TEST_REPLACED");
+    /* With env, a missing program fails before any fork. */
+    const char *missing[] = {"tam-no-such-program-here", NULL};
+    errno = 0;
+    assert(tam_spawn_detached_opts(missing, &pass) == -1 && errno == ENOENT);
+
+    /* stdin_fd: a foreground program reads the given descriptor, not ours. */
+    int in[2];
+    assert(pipe(in) == 0);
+    assert(write(in[1], "fed\n", 4) == 4);
+    close(in[1]);
+    tam_proc_opts_t feed = { .stdin_fd = in[0] };
+    int code = -1;
+    const char *check[] = {"sh", "-c", "read x; [ \"$x\" = fed ]", NULL};
+    assert(tam_run_foreground_opts(check, &feed, &code) == 0 && code == 0);
+    close(in[0]);
+    /* A zero-initialised struct is the plain call. */
+    tam_proc_opts_t none = {0};
+    const char *t[] = {"true", NULL};
+    assert(tam_run_foreground_opts(t, &none, &code) == 0 && code == 0);
+    assert(tam_spawn_detached_opts(t, &none) == 0);
+    printf("  [PASS] test_proc_opts\n");
+}
+
 static void test_foreground(void)
 {
     int code = -5;
@@ -358,6 +422,18 @@ static void test_sock(void)
     took = tam_monotonic_ms() - t0;
     assert(took < 450);
     assert(waitpid(pid, NULL, 0) == pid);
+    close(s);
+    close(c);
+
+    /* On failure the caller's buffer is wiped: no request bytes remain. */
+    c = tam_sock_connect(path, 1000);
+    s = accept4(lfd, NULL, NULL, SOCK_CLOEXEC);
+    assert(c >= 0 && s >= 0);
+    assert(tam_write_all(c, "secret", 6) == 0);
+    char wiped[32];
+    memset(wiped, 'z', sizeof wiped);
+    assert(tam_sock_read_line(s, wiped, sizeof wiped, 100) == -1 && errno == ETIMEDOUT);
+    for (size_t i = 0; i < sizeof wiped; i++) assert(wiped[i] == 0);
     close(s);
     close(c);
 
@@ -537,6 +613,7 @@ int main(void)
     test_io();
     test_which();
     test_spawn();
+    test_proc_opts();
     test_foreground();
     test_xdg();
     test_sock();

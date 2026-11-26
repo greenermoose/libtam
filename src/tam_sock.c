@@ -152,55 +152,71 @@ ssize_t tam_sock_read_line(int fd, char *buf, size_t size, int timeout_ms)
     if (timeout_ms <= 0) timeout_ms = TAM_SOCK_DEFAULT_TIMEOUT_MS;
     long long deadline = tam__now_ms() + timeout_ms;
     size_t used = 0;
+    ssize_t result = -1;
+    int err = 0;
+    /* Requests may carry secrets (tam-hide's passcodes): the peek copy is
+     * wiped on every exit, and buf on failure. */
+    char peek[512];
     buf[0] = '\0';
     for (;;) {
         long long left = deadline - tam__now_ms();
         if (left <= 0) {
-            errno = ETIMEDOUT;
-            return -1;
+            err = ETIMEDOUT;
+            break;
         }
         struct pollfd pfd = { fd, POLLIN, 0 };
         int p = poll(&pfd, 1, (int)left);
         if (p < 0) {
             if (errno == EINTR) continue;
-            return -1;
+            err = errno;
+            break;
         }
         if (p == 0) continue;
 
         /* Peek, so bytes after the newline stay for the next read. */
         size_t room = size - 1 - used;
-        char peek[512];
         size_t want = room + 1 < sizeof(peek) ? room + 1 : sizeof(peek);
         ssize_t n = recv(fd, peek, want, MSG_PEEK | MSG_DONTWAIT);
         if (n < 0) {
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue;
-            return -1;
+            err = errno;
+            break;
         }
         if (n == 0) {
             if (used == 0) {
-                errno = ENODATA;
-                return -1;
+                err = ENODATA;
+            } else {
+                buf[used] = '\0';
+                result = (ssize_t)used;
             }
-            buf[used] = '\0';
-            return (ssize_t)used;
+            break;
         }
         char *nl = memchr(peek, '\n', (size_t)n);
         size_t take = nl != NULL ? (size_t)(nl - peek) + 1 : (size_t)n;
         size_t keep = nl != NULL ? take - 1 : take;
         if (keep > room) {
-            errno = EMSGSIZE;
-            return -1;
+            err = EMSGSIZE;
+            break;
         }
         ssize_t got;
         do {
             got = recv(fd, buf + used, take, MSG_DONTWAIT);
         } while (got < 0 && errno == EINTR);
         if (got != (ssize_t)take) {
-            if (got >= 0) errno = EIO;
-            return -1;
+            err = got >= 0 ? EIO : errno;
+            break;
         }
         used += keep;
         buf[used] = '\0';
-        if (nl != NULL) return (ssize_t)used;
+        if (nl != NULL) {
+            result = (ssize_t)used;
+            break;
+        }
     }
+    explicit_bzero(peek, sizeof(peek));
+    if (result < 0) {
+        explicit_bzero(buf, size);
+        errno = err;
+    }
+    return result;
 }

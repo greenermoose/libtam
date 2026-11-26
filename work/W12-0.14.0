@@ -1,0 +1,39 @@
+W12 0.14.0: OPTIONS FOR THE MIGRATIONS
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W11
+
+
+GUIDANCE
+
+  Fred: "Move each program onto the shared code." The migration sweeps
+  found two gaps that would have forced local code to stay.
+
+
+DONE
+
+  - tam_proc_opts_t, tam_spawn_detached_opts, tam_run_foreground_opts:
+    stdin_fd, keep_stdio, keep_fd (close-on-exec cleared) and env (an
+    envp built before fork; with env the program is resolved with
+    tam_which first). Zero-initialised options change nothing. The plain
+    calls are wrappers.
+  - The child close helper spares two descriptors (the report pipe and
+    keep_fd).
+  - tam_sock_read_line wipes its 512-byte peek copy on every exit and the
+    caller's buffer on failure.
+  - Tests: kept stdout, a kept descriptor and an added and a replaced
+    variable seen by a detached child, stdin_fd for a foreground child,
+    a zero struct, ENOENT before fork, a wiped buffer after a timeout.
+    make test passes.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - The migrations, program by program, per P1.

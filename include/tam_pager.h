@@ -17,8 +17,8 @@ const char *tam_pager_attention_sgr(bool linux_vt);
 /* SGR sequence for the currently focused hyperlink on the attention row. */
 const char *tam_pager_link_focus_sgr(bool linux_vt);
 
-/* Return true if url is non-empty, contains no control/DEL bytes (< 0x20 or
- * 0x7f), and is at most max_len bytes (when max_len > 0). */
+/* Return true if url is non-empty, contains only printable ASCII bytes
+ * (0x20-0x7e), and is at most max_len bytes (when max_len > 0). */
 bool tam_osc8_url_safe(const char *url, size_t max_len);
 
 /* Write an OSC 8 opening sequence ("\033]8;;<url>\033\\") into out when url is

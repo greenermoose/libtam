@@ -32,8 +32,8 @@ for a fix. Consumers build and test against a pinned version of
 Approved by Fred on 2026-11-25, from [review R2](reviews/R2-whole-suite-consumers.md).
 Each version lands on his acceptance.
 
-- **0.9.2:** version bump for the `tam_pager` hardening, and stale
-  comments corrected.
+- **0.9.2 (done 2026-11-26):** version bump for the `tam_pager`
+  hardening, and stale comments corrected.
 - **0.10.0:** core semantics fixed in place, with every caller migrated
   (`tam_str`, `tam_fs`, `tam_key_feed`, `tam_exec`, one error
   convention).

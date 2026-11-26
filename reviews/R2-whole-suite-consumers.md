@@ -243,7 +243,8 @@ Consumer bugs found along the way are listed at the end.
     `--atleast-version` for what it actually uses.
   - Make the archive a link prerequisite.
   - Reconcile tam's pin.
-- **Status:** open
+- **Status:** 0.9.2 names the hardening; the rest open (P1 0.10.0 and
+  migrations)
 
 ## Consumer bugs found along the way
 

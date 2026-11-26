@@ -26,14 +26,14 @@ extern "C" {
 
 #define TAM_VERSION_MAJOR 0
 #define TAM_VERSION_MINOR 9
-#define TAM_VERSION_PATCH 1
-#define TAM_VERSION_STRING "0.9.1"
+#define TAM_VERSION_PATCH 2
+#define TAM_VERSION_STRING "0.9.2"
 
 const char *tam_version(void);
 
-/* Read-only startup barrier. NULL checks /var/lib/tamlinux/pending.json and
- * /var/lib/tamlinux/source/pending.json. Returns 0 when absent, 1 when an
- * installation or upgrade transaction is pending, -1 on unexpected error. */
+/* Read-only startup barrier. NULL checks /var/lib/tamlinux/pending.json, the
+ * file the installer writes. Returns 0 when absent, 1 when an installation or
+ * upgrade transaction is pending, -1 on unexpected error. */
 int tam_install_pending(const char *pending_path);
 
 /* Read the active cultivar version string (e.g. "0.6.35") under root (or "/"
@@ -61,6 +61,13 @@ void tam_log_debug(const char *fmt, ...);
 /* Dynamic Strings (tam_str)                                                 */
 /* ========================================================================= */
 
+/* An append returns the string, which may have moved. On allocation failure
+ * it returns NULL and leaves the old string allocated, so keep the old
+ * pointer until the result is checked (tam_str_cat_json differs; see below):
+ *     tam_str_t t = tam_str_cat(s, "x");
+ *     if (!t) { tam_str_free(s); return -1; }
+ *     s = t;
+ * libtam 0.10.0 plans to free the old string on failure instead. */
 typedef char *tam_str_t;
 
 tam_str_t tam_str_new(const char *init);
@@ -77,7 +84,9 @@ tam_str_t tam_str_trim(tam_str_t s, const char *cset);
 
 /* Append text as the body of a JSON string (no surrounding quotes): quotes,
  * backslashes and control characters are escaped; other bytes, including
- * UTF-8, pass through. */
+ * UTF-8, pass through. On allocation failure it returns NULL and the string
+ * is lost: it may already have moved, so the caller's old pointer must not be
+ * freed or used. */
 tam_str_t tam_str_cat_json(tam_str_t s, const char *text);
 
 /* ========================================================================= */

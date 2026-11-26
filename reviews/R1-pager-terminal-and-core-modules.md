@@ -68,8 +68,7 @@ memory-safety defect.
 - **Evidence:** `tam_osc8_url_safe("http://a\xC2\x9B" "31mX", 0)` returns
   true.
 - **Fix:** Accept only bytes 0x20–0x7E, or percent-encode the rest.
-- **Status:** fixed in `a3e0901` (only 0x20-0x7E accepted); the
-  `tam_pager.h` comment is still stale, P1 0.9.2
+- **Status:** fixed in `a3e0901`; header comment corrected in 0.9.2
 
 ### 5. The `tam_install_pending` header describes removed behaviour (low)
 
@@ -79,7 +78,7 @@ memory-safety defect.
   code checks only the first path, which is the one the installer writes.
 - **Evidence:** [tam_cultivar.c](../src/tam_cultivar.c#L18-L23).
 - **Fix:** Correct the comment.
-- **Status:** open; P1 0.9.2
+- **Status:** fixed in 0.9.2
 
 ### 6. A failed `tam_str` append invites a leak (low)
 
@@ -91,7 +90,8 @@ memory-safety defect.
 - **Evidence:** Source inspection.
 - **Fix:** Document the pattern in `tam.h`, and check `len + addlen` and the
   doubling for overflow.
-- **Status:** open; became R2 finding 1
+- **Status:** pattern documented in `tam.h` in 0.9.2; the fix became R2
+  finding 1
 
 ### 7. Width depends on the caller's locale (low)
 

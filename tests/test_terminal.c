@@ -695,6 +695,27 @@ static void test_tty_job_stop_and_restore(void)
     close(slave);
     close(master);
 
+    /* A session leader (its process group is orphaned, so the kernel
+     * discards SIGTSTP) still pauses, and resumes intact. */
+    master = open_pty(&slave);
+    pid = fork();
+    if (pid == 0) {
+        setsid();
+        tam_tty_t t;
+        tam_tty_open(&t, slave, slave);
+        tam_tty_raw(&t, true);
+        tam_tty_job_stop(&t);
+        int ok = t.raw && !t.suspended;
+        tam_tty_close(&t);
+        _exit(ok ? 0 : 1);
+    }
+    assert(waitpid(pid, &status, WUNTRACED) == pid && WIFSTOPPED(status));
+    assert(tcgetattr(slave, &now) == 0 && (now.c_lflag & ICANON) != 0);
+    kill(pid, SIGCONT);
+    assert(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    close(slave);
+    close(master);
+
     /* A program killed in raw mode on the alternate screen, or one that
      * crashes, leaves the terminal as it found it. (SIGSEGV is not tried:
      * under AddressSanitizer its handler owns that signal, and

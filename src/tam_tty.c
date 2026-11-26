@@ -447,7 +447,14 @@ int tam_tty_job_stop(tam_tty_t *t)
     sigaddset(&tstp, SIGTSTP);
     int have_old = sigaction(SIGTSTP, &dfl, &old) == 0;
     (void)sigprocmask(SIG_UNBLOCK, &tstp, &oldmask);
-    (void)raise(SIGTSTP);           /* stops here until SIGCONT */
+    /* The kernel discards SIGTSTP for an orphaned process group, which is
+     * what a program has when its parent is outside its session (started
+     * directly as a session leader, as a terminal starts its first
+     * program). There SIGSTOP, which cannot be discarded, does the job;
+     * under a shell SIGTSTP keeps job control's usual report. */
+    pid_t parent = getppid();
+    bool orphaned = parent <= 1 || getsid(parent) != getsid(0);
+    (void)raise(orphaned ? SIGSTOP : SIGTSTP); /* stops here until SIGCONT */
     (void)sigprocmask(SIG_SETMASK, &oldmask, NULL);
     if (have_old) (void)sigaction(SIGTSTP, &old, NULL);
     return tam_tty_resume(t);

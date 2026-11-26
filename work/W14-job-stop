@@ -1,0 +1,34 @@
+W14 0.14.1: PAUSE A SESSION LEADER
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W13
+
+
+GUIDANCE
+
+  Fred: "Fix the libtam bug."
+
+
+DONE
+
+  - tam_tty_job_stop raised SIGTSTP, which the kernel discards for an
+    orphaned process group, so a program started directly as a session
+    leader (as a terminal starts its first program) did not pause. It now
+    raises SIGSTOP when its parent is outside its session (or is init),
+    and SIGTSTP otherwise, so job control under a shell is unchanged.
+  - test_terminal: a setsid child pauses with job_stop, the terminal is
+    in normal mode while it is stopped, and it resumes in raw mode.
+  - make test passes. Installed to ~/.local.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - tam-view and tam-knox can drop their own SIGSTOP and call
+    tam_tty_job_stop.

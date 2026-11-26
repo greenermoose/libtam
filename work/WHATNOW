@@ -3,12 +3,12 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W13
+Updated: 2026-11-26, with W14
 
 
 STATE
 
-  Version 0.14.0 on branch dev (the VERSION file is the version's source
+  Version 0.14.1 on branch dev (the VERSION file is the version's source
   of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
   archives by default: libtam.a, the core, which needs only libc, and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
@@ -44,8 +44,8 @@ NEXT
   P1 (plans/P1-0.7-refactor.md) is queued, one version per slice, each
   landing on Fred's acceptance:
 
-  0. P1 is done. Open: tam_tty_job_stop does nothing for an orphaned
-     process group (see P1); tam-open does not link libtam yet.
+  0. P1 is done; 0.14.1 fixed tam_tty_job_stop for orphaned process
+     groups (W14). Open: tam-open does not link libtam yet.
 
   These requests stay queued, each to start only when Fred asks:
 

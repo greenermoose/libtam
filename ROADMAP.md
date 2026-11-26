@@ -45,6 +45,8 @@ Each version lands on his acceptance.
   renderer.
 - **0.14.0 (done 2026-11-26):** process options (stdin, kept output, a
   kept descriptor, environment) and a socket reader safe for secrets.
+- **0.14.1 (done 2026-11-26):** `tam_tty_job_stop` pauses a session
+  leader too (SIGSTOP when the process group is orphaned).
 - **Consumer migrations (done 2026-11-26):** every program that links
   libtam moved onto it, one commit each.
 

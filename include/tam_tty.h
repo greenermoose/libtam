@@ -90,10 +90,10 @@ int tam_tty_resume(tam_tty_t *t);
 
 /* Pause: stop the program as a shell's suspend key would (in raw mode that
  * key arrives as a keystroke; the Tamlinux keys put Pause on Ctrl+P, as
- * Ctrl+Z is Undo): suspend, stop with SIGTSTP, and resume when continued. The kernel
- * discards SIGTSTP for an orphaned process group (a program that is its
- * session's leader): there this returns at once without stopping, so such
- * programs use tam_tty_suspend, raise(SIGSTOP) and tam_tty_resume. */
+ * Ctrl+Z is Undo): suspend, stop, and resume when continued. Under a shell
+ * it stops with SIGTSTP; when the program's parent is outside its session
+ * (its process group is orphaned, and the kernel would discard SIGTSTP) it
+ * stops with SIGSTOP, so the pause always happens. */
 int tam_tty_job_stop(tam_tty_t *t);
 
 /* Put the terminal back if the program dies or exits without

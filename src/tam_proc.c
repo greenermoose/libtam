@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "tam_proc.h"
 #include "tam_internal.h"
 

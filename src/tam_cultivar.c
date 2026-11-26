@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "tam.h"
 #include <errno.h>
 #include <stdbool.h>

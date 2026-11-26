@@ -6,6 +6,11 @@
 #include <signal.h>
 #include <termios.h>
 
+/* tam_tty_t holds a struct sigaction, which is POSIX. */
+#if !defined(_POSIX_C_SOURCE) || _POSIX_C_SOURCE < 200809L
+#error "tam_tty.h needs POSIX.1-2008: compile with -D_POSIX_C_SOURCE=200809L or -D_GNU_SOURCE"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

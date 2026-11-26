@@ -1,4 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
 
 #include "tam_pager.h"
 #include "tam_uni.h"

@@ -1,14 +1,10 @@
 #ifndef TAM_H
 #define TAM_H
 
-/* Feature macros take effect only before the first system header; a program
- * that includes one earlier keeps its own choice. */
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
+/* libtam's headers need no feature macros: each program chooses its own
+ * (for example -D_GNU_SOURCE or -D_POSIX_C_SOURCE=200809L) on its compiler
+ * command line, where they apply to every system header. Since 0.15.0
+ * tam.h no longer sets them. */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -25,9 +21,9 @@ extern "C" {
 /* ========================================================================= */
 
 #define TAM_VERSION_MAJOR 0
-#define TAM_VERSION_MINOR 14
-#define TAM_VERSION_PATCH 2
-#define TAM_VERSION_STRING "0.14.2"
+#define TAM_VERSION_MINOR 15
+#define TAM_VERSION_PATCH 0
+#define TAM_VERSION_STRING "0.15.0"
 
 const char *tam_version(void);
 

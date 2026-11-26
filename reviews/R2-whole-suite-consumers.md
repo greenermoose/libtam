@@ -151,8 +151,9 @@ Consumer bugs found along the way are listed at the end.
   with errno set. A pointer result is NULL with errno set. Name the enums,
   add the format attributes, and move the feature macros into each
   consumer's CFLAGS.
-- **Status:** partly fixed in 0.10.0 (format attributes, named enums, one
-  convention for changed functions); feature macros deferred
+- **Status:** fixed: 0.10.0 (format attributes, named enums, one
+  convention for changed functions) and 0.15.0 (tam.h sets no feature
+  macros; each consumer's build sets its own)
 
 ### 7. Other silent truncation and parsing gaps (low)
 

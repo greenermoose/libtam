@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "tam_sock.h"
 #include "tam_internal.h"
 

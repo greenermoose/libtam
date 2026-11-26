@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "tam_display_internal.h"
 #include <dirent.h>
 #include <errno.h>

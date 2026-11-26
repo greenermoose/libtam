@@ -1,0 +1,49 @@
+W16 0.15.0: NO FEATURE MACROS IN TAM.H
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W15
+
+
+GUIDANCE
+
+  Fred: "all four" (item 2: the feature macros in tam.h).
+
+
+DONE
+
+  - tam.h no longer defines _GNU_SOURCE and _POSIX_C_SOURCE. They took
+    effect only when tam.h came before every system header, so each
+    program's files silently differed. libtam's own build sets
+    -D_GNU_SOURCE, and the per-file defines in its sources are gone.
+  - tam_tty.h holds a struct sigaction, so it needs POSIX: it now says so
+    with an #error under strict C11 alone.
+  - tests/check-headers.sh (run by make test) compiles every public
+    header on its own: strict C11 with POSIX, with GNU, gnu11, and strict
+    C11 alone (except tam_tty.h, which must name its requirement).
+  - Consumers, built against 0.14.2 and 0.15.0 and compared (C library
+    imports, then .text byte for byte, 28 binaries):
+    - failed to build without the macros: tam-journal (tamlinux-tools),
+      start, tam-launch-journal; fixed with -D_GNU_SOURCE in their
+      Makefiles, as were tam-boot, tam-hardware and tam-meter, which set
+      none either.
+    - built, but silently switched C library variants (C23 strtol and
+      sscanf): tam and tam-view; given -D_GNU_SOURCE too.
+    - After the fixes 27 of 28 binaries have identical machine code. tam
+      differs only because one file that included system headers before
+      tam.h now also gets GNU (C23 strtoul); every strtoul call in tam
+      uses base 8, 10 or 16, where both variants are the same.
+    - tam-edit, tam-clam, tam-last, tam-pane, tam-knox, tam-data,
+      tam-hide and tam-monitor already set their own macros: unchanged.
+  - make test and make test-display test-session pass.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - tam-open moves onto libtam next.

@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "tam_display_session.h"
 #include <systemd/sd-bus.h>
 #include <systemd/sd-device.h>

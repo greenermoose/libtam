@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "tam_vt.h"
 #include <assert.h>
 #include <errno.h>

@@ -81,10 +81,11 @@ int tam_uri_resolve_local(const char *base_path, const char *href,
  * length written (excluding NUL). */
 size_t tam_uri_slugify(const char *text, size_t len, char *out, size_t cap);
 
-/* Open an external URL (http://, https://, mailto:) via xdg-open without a
- * shell, redirecting stdio to /dev/null and avoiding zombies. Callers should
- * confirm with the user before invoking. Returns 0 on successful exec or -1 on
- * invalid URL, fork or exec failure. */
+/* Open an external URL (http://, https://, mailto:) with xdg-open, started
+ * by tam_spawn_detached (no shell, no inherited descriptors, no zombie).
+ * Callers should confirm with the user before invoking. 0 once xdg-open has
+ * started, or -1 with errno: EINVAL for a URL that is not external, ENOENT
+ * when xdg-open is missing, or a fork failure. */
 int tam_uri_open_external(const char *url);
 
 #ifdef __cplusplus

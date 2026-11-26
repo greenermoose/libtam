@@ -1,5 +1,8 @@
 #include "tam_uni.h"
 
+#include <langinfo.h>
+#include <locale.h>
+#include <string.h>
 #include <wchar.h>
 
 size_t tam_utf8_seq_len(unsigned char first)
@@ -141,4 +144,45 @@ int tam_uni_fit(const char *s, size_t len, int cells, char *out, size_t out_cap)
     }
     out[used_bytes] = '\0';
     return used_cells;
+}
+
+size_t tam_utf8_prev(const char *s, size_t pos)
+{
+    if (s == NULL || pos == 0) return 0;
+    const unsigned char *b = (const unsigned char *)s;
+    size_t start = pos - 1;
+    for (int back = 0; back < 3 && start > 0 && (b[start] & 0xC0) == 0x80; back++)
+        start--;
+    uint32_t cp;
+    size_t used = tam_utf8_decode(s + start, pos - start, &cp);
+    return start + used == pos ? start : pos - 1;
+}
+
+bool tam_utf8_valid(const char *s, size_t len)
+{
+    if (s == NULL) return len == 0;
+    const unsigned char *b = (const unsigned char *)s;
+    size_t i = 0;
+    while (i < len) {
+        if (b[i] < 0x80) {
+            i++;
+            continue;
+        }
+        uint32_t cp;
+        size_t used = tam_utf8_decode(s + i, len - i, &cp);
+        /* A one-byte result for a byte >= 0x80 is the invalid case; a real
+         * U+FFFD is three bytes long. */
+        if (used <= 1) return false;
+        i += used;
+    }
+    return true;
+}
+
+bool tam_locale_init(void)
+{
+    if (setlocale(LC_CTYPE, "") != NULL && strcmp(nl_langinfo(CODESET), "UTF-8") == 0)
+        return true;
+    if (setlocale(LC_CTYPE, "C.UTF-8") != NULL && strcmp(nl_langinfo(CODESET), "UTF-8") == 0)
+        return true;
+    return false;
 }

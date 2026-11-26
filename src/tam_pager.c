@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include "tam_proc.h"
 #include "tam_internal.h"
 
 const char *tam_pager_attention_sgr(bool linux_vt)
@@ -390,106 +391,12 @@ size_t tam_uri_slugify(const char *text, size_t len, char *out, size_t cap)
     return used;
 }
 
-/* Close every descriptor above stderr except `keep`, so the opener does not
- * hold the caller's files, sockets or terminal open. */
-static void close_inherited(int keep)
-{
-#ifdef SYS_close_range
-    if (keep > STDERR_FILENO + 1 &&
-        syscall(SYS_close_range, STDERR_FILENO + 1, keep - 1, 0) != 0)
-        goto fallback;
-    if (syscall(SYS_close_range, keep + 1, ~0U, 0) == 0)
-        return;
-fallback:
-#endif
-    {
-        long max = sysconf(_SC_OPEN_MAX);
-        if (max < 0 || max > 65536) max = 65536;
-        for (int fd = STDERR_FILENO + 1; fd < max; fd++)
-            if (fd != keep) (void)close(fd);
-    }
-}
-
 int tam_uri_open_external(const char *url)
 {
     if (tam_uri_classify(url) != TAM_URI_EXTERNAL) {
         errno = EINVAL;
         return -1;
     }
-
-    int report[2];
-    if (pipe(report) < 0)
-        return -1;
-    if (fcntl(report[0], F_SETFD, FD_CLOEXEC) < 0 ||
-        fcntl(report[1], F_SETFD, FD_CLOEXEC) < 0) {
-        int err = errno;
-        close(report[0]);
-        close(report[1]);
-        errno = err;
-        return -1;
-    }
-    pid_t pid = fork();
-    if (pid < 0) {
-        int err = errno;
-        close(report[0]);
-        close(report[1]);
-        errno = err;
-        return -1;
-    }
-    if (pid == 0) {
-        close(report[0]);
-        pid_t grand = fork();
-        if (grand < 0) {
-            int err = errno;
-            (void)write(report[1], &err, sizeof(err));
-            _exit(127);
-        }
-        if (grand > 0)
-            _exit(0);
-        if (setsid() < 0) {
-            int err = errno;
-            (void)write(report[1], &err, sizeof(err));
-            _exit(127);
-        }
-        int null_fd = open("/dev/null", O_RDWR);
-        if (null_fd >= 0) {
-            (void)dup2(null_fd, STDIN_FILENO);
-            (void)dup2(null_fd, STDOUT_FILENO);
-            (void)dup2(null_fd, STDERR_FILENO);
-            if (null_fd > STDERR_FILENO)
-                close(null_fd);
-        }
-        close_inherited(report[1]);
-        static const int sigs[] = {SIGINT, SIGQUIT, SIGTERM, SIGWINCH, SIGPIPE, SIGTSTP};
-        for (size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++)
-            (void)signal(sigs[i], SIG_DFL);
-        sigset_t none;
-        sigemptyset(&none);
-        (void)sigprocmask(SIG_SETMASK, &none, NULL);
-        char *argv[] = {"xdg-open", (char *)url, NULL};
-        execvp("xdg-open", argv);
-        int err = errno;
-        (void)write(report[1], &err, sizeof(err));
-        _exit(127);
-    }
-    close(report[1]);
-    int child_error = 0;
-    ssize_t count;
-    do {
-        count = read(report[0], &child_error, sizeof(child_error));
-    } while (count < 0 && errno == EINTR);
-    int read_error = errno;
-    close(report[0]);
-    int status = 0;
-    pid_t waited;
-    do {
-        waited = waitpid(pid, &status, 0);
-    } while (waited < 0 && errno == EINTR);
-    if (count < 0) { errno = read_error; return -1; }
-    if (count != 0) { errno = count == sizeof(child_error) ? child_error : EIO; return -1; }
-    if (waited < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        if (waited >= 0) errno = EIO;
-        return -1;
-    }
-    return 0;
+    const char *argv[] = {"xdg-open", url, NULL};
+    return tam_spawn_detached(argv);
 }

@@ -25,9 +25,9 @@ extern "C" {
 /* ========================================================================= */
 
 #define TAM_VERSION_MAJOR 0
-#define TAM_VERSION_MINOR 10
+#define TAM_VERSION_MINOR 11
 #define TAM_VERSION_PATCH 0
-#define TAM_VERSION_STRING "0.10.0"
+#define TAM_VERSION_STRING "0.11.0"
 
 const char *tam_version(void);
 
@@ -35,6 +35,12 @@ const char *tam_version(void);
  * file the installer writes. Returns 0 when absent, 1 when an installation or
  * upgrade transaction is pending, -1 on unexpected error. */
 int tam_install_pending(const char *pending_path);
+
+/* The startup guard every Tamlinux command runs first. 0 when no update is
+ * pending. Otherwise it prints why on stderr, prefixed with `program`, and
+ * returns 1 when an update is pending or -1 when the check itself failed;
+ * either way the caller exits without doing its work. */
+int tam_install_guard(const char *program);
 
 /* Read the active cultivar version string (e.g. "0.6.35") from
  * usr/lib/tamlinux/current/VERSION under root (or "/" when root is NULL).
@@ -96,6 +102,13 @@ tam_str_t tam_str_trim(tam_str_t s, const char *cset);
  * backslashes and control characters are escaped; other bytes, including
  * UTF-8, pass through. Fails like any other append. */
 tam_str_t tam_str_cat_json(tam_str_t s, const char *text);
+
+/* Append a whole JSON string, with its quotes; NULL text appends null. */
+tam_str_t tam_str_cat_json_str(tam_str_t s, const char *text);
+
+/* Append "key":"value" (value NULL appends "key":null), with no separator
+ * before it; the caller writes the commas and braces. */
+tam_str_t tam_str_cat_json_kv(tam_str_t s, const char *key, const char *value);
 
 /* ========================================================================= */
 /* Subprocess Execution with Mandatory Timeout (tam_exec)                    */
@@ -329,6 +342,29 @@ typedef enum {
  * directory cannot be made. Caller frees. */
 char *tam_xdg_path(tam_xdg_kind_t kind, const char *command, const char *leaf,
                    bool create);
+
+/* The base directory itself ($XDG_..._HOME or its fallback, or
+ * $XDG_RUNTIME_DIR), for a program that keeps its own layout. Values that
+ * are not absolute are ignored. A path the caller frees, or NULL with errno
+ * ENOENT. */
+char *tam_xdg_base(tam_xdg_kind_t kind);
+
+/* Visit the directories searched for data or configuration files, most
+ * important first: for TAM_XDG_DATA the data home, then each absolute entry
+ * of $XDG_DATA_DIRS (default /usr/local/share:/usr/share); for
+ * TAM_XDG_CONFIG the config home, then $XDG_CONFIG_DIRS (default /etc/xdg);
+ * for the other kinds only the base. A non-zero return from `fn` stops the
+ * walk and is returned; 0 when every directory was visited. */
+typedef int (*tam_xdg_dir_fn)(const char *dir, void *user);
+int tam_xdg_search(tam_xdg_kind_t kind, tam_xdg_dir_fn fn, void *user);
+
+/* A private runtime directory, $XDG_RUNTIME_DIR/<name>, for sockets and
+ * other per-session files. Creates it with mode 0700 where missing, and
+ * checks that it and $XDG_RUNTIME_DIR are real directories (not links),
+ * owned by the caller and closed to group and others. `name` is one path
+ * component. A path the caller frees, or NULL with errno: ENOENT (no
+ * runtime directory), EPERM (wrong owner or mode), ENOTDIR or EINVAL. */
+char *tam_runtime_dir(const char *name);
 /* ========================================================================= */
 /* Lightweight INI Parser (tam_ini)                                          */
 /* ========================================================================= */
@@ -348,6 +384,12 @@ int tam_ini_parse_string(const char *string, tam_ini_handler_t handler, void *us
 #ifdef __cplusplus
 }
 #endif
+
+/* The rest of the core. */
+#include "tam_io.h"
+#include "tam_proc.h"
+#include "tam_sock.h"
+#include "tam_b64.h"
 
 #endif /* TAM_H */
 

@@ -196,7 +196,8 @@ Consumer bugs found along the way are listed at the end.
 - **Fix:** Add the `tam_proc`, `tam_io`, `tam_time`, `tam_sock` and
   `tam_b64` modules, and extend `tam_path`, `tam_uni`, `tam_tty`,
   `tam_key` and `tam_cultivar` (P1 Phases 2 and 3).
-- **Status:** open
+- **Status:** primitives added in 0.11.0; the consumers' own copies go in
+  the P1 migrations
 
 ### 9. tam-view's renderer is copied verbatim into tam-knox (medium)
 

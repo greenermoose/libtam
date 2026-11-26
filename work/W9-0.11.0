@@ -1,0 +1,52 @@
+W9 0.11.0: SHARED PRIMITIVES
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W8
+
+
+GUIDANCE
+
+  Fred: "Do 0.11.0"
+
+
+DONE
+
+  - New headers, each included by tam.h and installed: tam_proc.h
+    (tam_which, tam_spawn_detached, tam_run_foreground), tam_io.h
+    (tam_write_all, tam_read_line, tam_monotonic_ms/_ns), tam_sock.h
+    (listen, peer uid, connect, read_line with one deadline) and
+    tam_b64.h.
+  - tam_xdg_base, tam_xdg_search, tam_runtime_dir; tam_utf8_prev,
+    tam_utf8_valid, tam_locale_init; tam_install_guard;
+    tam_str_cat_json_str and _kv; tam_tty_osc52_copy.
+  - The pager's opener is tam_spawn_detached; tam_tty_write is
+    tam_write_all; the cultivar reader is tam_read_line; tam_exec, the
+    opener and tam_proc share one set of child helpers in
+    src/tam_internal.h.
+  - tests/test_primitives.c (whole core under ASan and UBSan): a full
+    non-blocking pipe, trimmed and over-long lines, PATH order and empty
+    entries, a detached child that sees none of our descriptors and none
+    of our ignored signals, exit codes and signal deaths, XDG search
+    order, runtime-directory owner, mode and link checks, socket stale,
+    live and plain-file cases, a slow drip held to one deadline, RFC
+    4648 vectors, UTF-8 stepping and validation, JSON helpers, OSC 52 on
+    a pty.
+  - make test, test-display and test-session pass. Installed to
+    ~/.local. tam, tam-clam, tam-data, tam-edit, tam-knox, tam-last,
+    tam-pane, tam-view and tamlinux-tools build against it and pass
+    their tests. tam needed one change (command 0.69.9): its own
+    tam_utf8_prev clashed with libtam's.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - P1 0.12.0 is next. tam_sock_listen's live check connects once;
+    servers must drop an empty connection (documented in tam_sock.h).
+  - tamlinux/components.lock still pins libtam a3e0901.

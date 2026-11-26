@@ -56,10 +56,11 @@ int main(void) {
     assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == 0);
     assert(strcmp(ver, "0.4.2a") == 0);
 
-    /* A value that does not fit fails instead of being cut short. */
+    /* A value that does not fit the caller's buffer fails instead of being
+     * cut short. */
     write_text(file, "0.6.37-with-a-very-long-suffix-that-does-not-fit-in-sixty-four-bytes\n");
     assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == -1);
-    char longline[700];
+    char longline[2000];
     memset(longline, '9', sizeof longline - 1);
     longline[sizeof longline - 1] = '\0';
     write_text(file, longline);

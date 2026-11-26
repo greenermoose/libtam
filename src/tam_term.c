@@ -10,7 +10,7 @@ void tam_log_set_level(tam_log_level_t level) {
 }
 
 static void tam_log_v(tam_log_level_t level, const char *prefix, const char *color_code, const char *fmt, va_list ap) {
-    if (level < g_log_level) {
+    if (level < g_log_level || fmt == NULL) {
         return;
     }
 

@@ -205,3 +205,54 @@ tam_str_t tam_str_cat_json(tam_str_t s, const char *text) {
     s[hdr->len] = '\0';
     return s;
 }
+
+/* Bytes tam_str_cat_json appends for text, or SIZE_MAX on overflow. */
+static size_t json_len(const char *text) {
+    char tmp[7];
+    size_t need = 0;
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        const char *esc = json_escape(*p, tmp);
+        size_t add = esc ? strlen(esc) : 1;
+        if (need > SIZE_MAX - 8 - add) return SIZE_MAX;
+        need += add;
+    }
+    return need;
+}
+
+/* Room for a quoted string, or null. */
+static size_t json_str_len(const char *text) {
+    if (!text) return 4;
+    size_t n = json_len(text);
+    return n == SIZE_MAX ? SIZE_MAX : n + 2;
+}
+
+/* Every piece is sized and the room made at once, so after that no append
+ * can fail and s is untouched on failure, as for every other append. */
+tam_str_t tam_str_cat_json_str(tam_str_t s, const char *text) {
+    if (!s) return NULL;
+    size_t need = json_str_len(text);
+    if (need == SIZE_MAX) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    s = tam_str_make_room(s, need);
+    if (!s) return NULL;
+    if (!text) return tam_str_cat_len(s, "null", 4);
+    s = tam_str_cat_len(s, "\"", 1);
+    s = tam_str_cat_json(s, text);
+    return tam_str_cat_len(s, "\"", 1);
+}
+
+tam_str_t tam_str_cat_json_kv(tam_str_t s, const char *key, const char *value) {
+    if (!s || !key) return s;
+    size_t k = json_str_len(key), v = json_str_len(value);
+    if (k == SIZE_MAX || v == SIZE_MAX || k > SIZE_MAX - 1 - v) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    s = tam_str_make_room(s, k + 1 + v);
+    if (!s) return NULL;
+    s = tam_str_cat_json_str(s, key);
+    s = tam_str_cat_len(s, ":", 1);
+    return tam_str_cat_json_str(s, value);
+}

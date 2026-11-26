@@ -54,6 +54,14 @@ int tam_tty_read(tam_tty_t *t, void *buf, size_t cap, int timeout_ms);
 /* Write all bytes, retrying short writes and EINTR. Returns 0 or -1. */
 int tam_tty_write(tam_tty_t *t, const void *buf, size_t len);
 
+/* Ask the terminal to put `len` bytes on the clipboard with OSC 52
+ * ("\033]52;c;<base64>\033\\"). Many terminals limit the size, so more
+ * than TAM_TTY_OSC52_MAX bytes is refused with EMSGSIZE; nothing is sent to
+ * a descriptor that is not a terminal (ENOTTY). Whether the terminal allows
+ * clipboard writes is up to it. 0, or -1 with errno. */
+#define TAM_TTY_OSC52_MAX 74994
+int tam_tty_osc52_copy(tam_tty_t *t, const void *data, size_t len);
+
 /* Wrap a frame in DEC synchronized output when the terminal supports it. */
 int tam_tty_frame_begin(tam_tty_t *t);
 int tam_tty_frame_end(tam_tty_t *t);

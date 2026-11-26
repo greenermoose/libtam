@@ -65,8 +65,34 @@ CAPABILITIES & MODULES
   Header / Symbol: tam_path_*, tam_xdg_path
   Description: Path joining, joining under a root that refuses .. and absolute
   paths, a check for safe relative paths inside a tree (tam_path_is_safe_rel),
-  and per-command XDG state, cache, data, config and runtime paths
-  (<base>/tamlinux/<command>/).
+  per-command XDG state, cache, data, config and runtime paths
+  (<base>/tamlinux/<command>/), the XDG base and search directories
+  (tam_xdg_base, tam_xdg_search), and a private runtime directory
+  (tam_runtime_dir).
+
+  Module: tam_proc
+  Header / Symbol: tam_which, tam_spawn_detached, tam_run_foreground in
+  <tam_proc.h>
+  Description: Finding a program on PATH, starting one detached (new
+  session, no inherited descriptors, exec errors reported), and running one
+  in the foreground the way system() does, without a shell.
+
+  Module: tam_io
+  Header / Symbol: tam_write_all, tam_read_line, tam_monotonic_ms in
+  <tam_io.h>
+  Description: Writing a whole buffer, reading one trimmed line of a sysfs or
+  /proc attribute without cutting it short, and the monotonic clock.
+
+  Module: tam_sock
+  Header / Symbol: tam_sock_* in <tam_sock.h>
+  Description: A program's local control socket: a listener that replaces
+  only a stale socket, the peer's user id, connect with a timeout, and a line
+  reader with one deadline for the whole line.
+
+  Module: tam_b64
+  Header / Symbol: tam_b64_* in <tam_b64.h>
+  Description: Base64 encode and decode, as OSC 52 clipboard copies use
+  (tam_tty_osc52_copy).
 
   Module: tam_ini
   Header / Symbol: tam_ini_*

@@ -38,6 +38,20 @@ int tam_uni_str_width(const char *s, size_t len);
  * fitting character is included. Returns the width used. */
 int tam_uni_fit(const char *s, size_t len, int cells, char *out, size_t out_cap);
 
+/* Start of the character before byte offset `pos` in s: the offset of the
+ * UTF-8 sequence that ends at pos, or pos - 1 when the bytes there are not a
+ * valid sequence (so stepping back always makes progress). 0 when pos is 0. */
+size_t tam_utf8_prev(const char *s, size_t pos);
+
+/* True when all `len` bytes of s are valid UTF-8 (no overlong forms,
+ * surrogates or values above U+10FFFF). */
+bool tam_utf8_valid(const char *s, size_t len);
+
+/* Set LC_CTYPE from the environment, falling back to C.UTF-8 when that
+ * locale is not UTF-8, so tam_uni_width and the C library agree on UTF-8.
+ * True when the resulting locale is UTF-8. Call it once at startup. */
+bool tam_locale_init(void);
+
 #ifdef __cplusplus
 }
 #endif

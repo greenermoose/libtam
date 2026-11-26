@@ -70,18 +70,7 @@ static int capture_read(int fd, capture_t *c, size_t max) {
  * (close-on-exec, so a successful exec closes it). */
 static void child_exec(const char *const argv[], int in_fd, int out_fd, int err_fd,
                        int report) {
-    static const int defaults[] = {SIGPIPE, SIGINT, SIGQUIT, SIGTERM, SIGHUP,
-                                   SIGCHLD, SIGTSTP, SIGTTIN, SIGTTOU, SIGALRM,
-                                   SIGUSR1, SIGUSR2, SIGWINCH};
-    struct sigaction dfl;
-    memset(&dfl, 0, sizeof(dfl));
-    dfl.sa_handler = SIG_DFL;
-    sigemptyset(&dfl.sa_mask);
-    for (size_t i = 0; i < sizeof(defaults) / sizeof(defaults[0]); i++)
-        (void)sigaction(defaults[i], &dfl, NULL);
-    sigset_t none;
-    sigemptyset(&none);
-    (void)sigprocmask(SIG_SETMASK, &none, NULL);
+    tam__child_default_signals();
 
     setpgid(0, 0);
     if (in_fd < 0) in_fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
@@ -89,12 +78,7 @@ static void child_exec(const char *const argv[], int in_fd, int out_fd, int err_
     dup2(out_fd, STDOUT_FILENO);
     dup2(err_fd, STDERR_FILENO);
     execvp(argv[0], (char *const *)argv);
-    int err = errno;
-    ssize_t w;
-    do {
-        w = write(report, &err, sizeof(err));
-    } while (w < 0 && errno == EINTR);
-    _exit(127);
+    tam__child_fail(report, errno);
 }
 
 /* Kill the child's process group, so helpers it started go too, and reap it. */

@@ -36,41 +36,23 @@ static bool version_token_ok(const char *s) {
     return true;
 }
 
-/* Read the first line of a small file, trimmed. Fails on a line that does
- * not fit, rather than returning part of it. */
 static int read_trimmed_line(const char *path, char *buf, size_t max_len) {
-    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOCTTY | O_NONBLOCK);
-    if (fd < 0) return -1;
-    struct stat st;
-    if (fstat(fd, &st) < 0 || !S_ISREG(st.st_mode)) {
-        close(fd);
-        return -1;
+    if (tam_read_line(path, buf, max_len) < 0) return -1;
+    return version_token_ok(buf) ? 0 : -1;
+}
+
+int tam_install_guard(const char *program) {
+    const char *name = (program && program[0]) ? program : "tamlinux";
+    int pending = tam_install_pending(NULL);
+    if (pending == 0) return 0;
+    if (pending > 0) {
+        fprintf(stderr, "%s: Tamlinux has an interrupted update pending; finish "
+                        "recovery from the console.\n", name);
+        return 1;
     }
-    char line[512];
-    size_t n = 0;
-    while (n < sizeof(line) - 1) {
-        ssize_t r = read(fd, line + n, sizeof(line) - 1 - n);
-        if (r < 0 && errno == EINTR) continue;
-        if (r <= 0) break;
-        n += (size_t)r;
-    }
-    close(fd);
-    line[n] = '\0';
-    char *nl = strchr(line, '\n');
-    if (nl) {
-        *nl = '\0';
-    } else if (n == sizeof(line) - 1) {
-        return -1;
-    }
-    n = strlen(line);
-    while (n > 0 && (line[n - 1] == '\r' || line[n - 1] == ' ' || line[n - 1] == '\t'))
-        line[--n] = '\0';
-    char *start = line;
-    while (*start == ' ' || *start == '\t') start++;
-    n = strlen(start);
-    if (n == 0 || n >= max_len || !version_token_ok(start)) return -1;
-    memcpy(buf, start, n + 1);
-    return 0;
+    fprintf(stderr, "%s: cannot check for an interrupted Tamlinux update: %s\n",
+            name, strerror(errno));
+    return -1;
 }
 
 int tam_cultivar_read_version(const char *root, char *buf, size_t max_len) {

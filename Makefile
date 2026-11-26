@@ -41,7 +41,11 @@ SRCS = src/tam_version.c \
        src/tam_uni.c \
        src/tam_key.c \
        src/tam_tty.c \
-       src/tam_pager.c
+       src/tam_pager.c \
+       src/tam_io.c \
+       src/tam_proc.c \
+       src/tam_sock.c \
+       src/tam_b64.c
 
 OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
 CORE_LIB = build/libtam.a
@@ -51,6 +55,7 @@ FILES_TEST_BIN = build/test_tam_files
 PORTAL_TEST_BIN = build/test_tam_portal
 CULTIVAR_TEST_BIN = build/test_tam_cultivar
 TERMINAL_TEST_BIN = build/test_tam_terminal
+PRIMITIVES_TEST_BIN = build/test_tam_primitives
 DISPLAY_SRCS = src/tam_display_discovery.c src/tam_display_kms.c src/tam_display_plan.c src/tam_display_fbcon.c src/tam_vt.c src/tam_display_access.c src/tam_display_restore.c src/tam_display_atomic.c
 DISPLAY_OBJS = $(patsubst src/%.c,build/display/%.o,$(DISPLAY_SRCS))
 SESSION_CFLAGS ?= $(shell pkg-config --cflags libsystemd)
@@ -118,7 +123,7 @@ test-display: build/test_display build/test_display_owned build/test_vt
 build:
 	mkdir -p build
 
-build/%.o: src/%.c include/tam.h src/tam_internal.h build/.flags | build
+build/%.o: src/%.c $(wildcard include/*.h) src/tam_internal.h build/.flags | build
 	$(CC) $(CFLAGS) -c $< -o $@
 
 build/tam_portal.o: src/tam_portal.c include/tam.h include/tam_portal.h build/.flags | build
@@ -142,21 +147,26 @@ $(PORTAL_TEST_BIN): tests/test_tam_portal.c include/tam_portal.h $(PORTAL_LIB) $
 	$(CC) $(CFLAGS) $(DBUS_CFLAGS) -fsanitize=address,undefined tests/test_tam_portal.c \
 		$(PORTAL_LIB) $(CORE_LIB) -o $@ $(shell pkg-config --libs dbus-1)
 
-$(CULTIVAR_TEST_BIN): tests/test_cultivar.c src/tam_cultivar.c include/tam.h | build
-	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_cultivar.c src/tam_cultivar.c -o $@
+$(CULTIVAR_TEST_BIN): tests/test_cultivar.c src/tam_cultivar.c src/tam_io.c include/tam.h | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_cultivar.c src/tam_cultivar.c src/tam_io.c -o $@
 
-$(TERMINAL_TEST_BIN): tests/test_terminal.c include/tam.h include/tam_uni.h include/tam_key.h include/tam_tty.h include/tam_pager.h src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_pager.c | build
-	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_terminal.c src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_pager.c src/tam_version.c -o $@
+$(TERMINAL_TEST_BIN): tests/test_terminal.c $(wildcard include/*.h) src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_pager.c src/tam_io.c src/tam_b64.c src/tam_proc.c | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_terminal.c src/tam_uni.c src/tam_key.c src/tam_tty.c src/tam_pager.c src/tam_io.c src/tam_b64.c src/tam_proc.c src/tam_version.c -o $@
 
 test-terminal: $(TERMINAL_TEST_BIN)
 	./$(TERMINAL_TEST_BIN)
 
-test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(CULTIVAR_TEST_BIN) $(TERMINAL_TEST_BIN)
+# The whole core, built with sanitizers, behind the 0.11.0 primitives' tests.
+$(PRIMITIVES_TEST_BIN): tests/test_primitives.c $(SRCS) $(wildcard include/*.h) src/tam_internal.h | build
+	$(CC) $(CFLAGS) -fsanitize=address,undefined tests/test_primitives.c $(SRCS) -o $@
+
+test: $(TEST_BIN) $(FILES_TEST_BIN) $(PORTAL_TEST_BIN) $(CULTIVAR_TEST_BIN) $(TERMINAL_TEST_BIN) $(PRIMITIVES_TEST_BIN)
 	./$(TEST_BIN)
 	./$(FILES_TEST_BIN)
 	./$(PORTAL_TEST_BIN)
 	./$(CULTIVAR_TEST_BIN)
 	./$(TERMINAL_TEST_BIN)
+	./$(PRIMITIVES_TEST_BIN)
 
 clean:
 	rm -rf build
@@ -168,7 +178,9 @@ install: install-core install-portal
 install-core: $(CORE_LIB)
 	install -d $(DESTDIR)$(PREFIX)/include
 	install -m 644 include/tam.h include/tam_uni.h include/tam_key.h \
-		include/tam_tty.h include/tam_pager.h $(DESTDIR)$(PREFIX)/include/
+		include/tam_tty.h include/tam_pager.h include/tam_io.h \
+		include/tam_proc.h include/tam_sock.h include/tam_b64.h \
+		$(DESTDIR)$(PREFIX)/include/
 	install -d $(DESTDIR)$(PREFIX)/lib
 	install -m 644 $(CORE_LIB) $(DESTDIR)$(PREFIX)/lib/
 	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so
@@ -206,7 +218,9 @@ uninstall: uninstall-core uninstall-portal uninstall-display uninstall-session
 uninstall-core:
 	rm -f $(DESTDIR)$(PREFIX)/include/tam.h $(DESTDIR)$(PREFIX)/include/tam_uni.h \
 		$(DESTDIR)$(PREFIX)/include/tam_key.h $(DESTDIR)$(PREFIX)/include/tam_tty.h \
-		$(DESTDIR)$(PREFIX)/include/tam_pager.h $(DESTDIR)$(PREFIX)/lib/libtam.a
+		$(DESTDIR)$(PREFIX)/include/tam_pager.h $(DESTDIR)$(PREFIX)/include/tam_io.h \
+		$(DESTDIR)$(PREFIX)/include/tam_proc.h $(DESTDIR)$(PREFIX)/include/tam_sock.h \
+		$(DESTDIR)$(PREFIX)/include/tam_b64.h $(DESTDIR)$(PREFIX)/lib/libtam.a
 	rm -f $(DESTDIR)$(PREFIX)/lib/libtam.so
 	rm -f $(DESTDIR)$(PKGCONFIGDIR)/libtam.pc
 

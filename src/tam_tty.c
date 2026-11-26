@@ -1,4 +1,6 @@
 #include "tam_tty.h"
+#include "tam_b64.h"
+#include "tam_io.h"
 
 #include <errno.h>
 #include <poll.h>
@@ -196,20 +198,41 @@ int tam_tty_read(tam_tty_t *t, void *buf, size_t cap, int timeout_ms)
 
 int tam_tty_write(tam_tty_t *t, const void *buf, size_t len)
 {
-    if (t == NULL || (buf == NULL && len > 0)) return -1;
-
-    const char *p = buf;
-    while (len > 0) {
-        ssize_t n = write(t->out_fd, p, len);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            return -1;
-        }
-        if (n == 0) return -1;
-        p += n;
-        len -= (size_t)n;
+    if (t == NULL || (buf == NULL && len > 0)) {
+        errno = EINVAL;
+        return -1;
     }
-    return 0;
+    return tam_write_all(t->out_fd, buf, len);
+}
+
+int tam_tty_osc52_copy(tam_tty_t *t, const void *data, size_t len)
+{
+    if (t == NULL || (data == NULL && len > 0)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (len > TAM_TTY_OSC52_MAX) {
+        errno = EMSGSIZE;
+        return -1;
+    }
+    if (!isatty(t->out_fd)) {
+        errno = ENOTTY;
+        return -1;
+    }
+    static const char head[] = "\033]52;c;";
+    static const char tail[] = "\033\\";
+    size_t enc = tam_b64_encoded_len(len);
+    size_t total = sizeof(head) - 1 + enc + sizeof(tail) - 1;
+    char *seq = malloc(total + 1);
+    if (seq == NULL) return -1;
+    memcpy(seq, head, sizeof(head) - 1);
+    tam_b64_encode(data, len, seq + sizeof(head) - 1);
+    memcpy(seq + sizeof(head) - 1 + enc, tail, sizeof(tail));
+    int rc = tam_write_all(t->out_fd, seq, total);
+    int err = errno;
+    free(seq);
+    errno = err;
+    return rc;
 }
 
 int tam_tty_frame_begin(tam_tty_t *t)

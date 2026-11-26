@@ -88,75 +88,75 @@ static void test_keys(void)
     tam_key_parser_t p;
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "a", 1) == 0);
+    assert(tam_key_feed(&p, "a", 1) == (int)(1));
     check_key(&p, TAM_KEY_CHAR, 'a', 0, "plain a");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\r\n\t\x7f", 4) == 0);
+    assert(tam_key_feed(&p, "\r\n\t\x7f", 4) == (int)(4));
     check_key(&p, TAM_KEY_ENTER, 0, 0, "CR");
     check_key(&p, TAM_KEY_ENTER, 0, 0, "LF");
     check_key(&p, TAM_KEY_TAB, 0, 0, "tab");
     check_key(&p, TAM_KEY_BACKSPACE, 0, 0, "DEL");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x01\x1a", 2) == 0);
+    assert(tam_key_feed(&p, "\x01\x1a", 2) == (int)(2));
     check_key(&p, TAM_KEY_CHAR, 'a', TAM_MOD_CTRL, "Ctrl-A");
     check_key(&p, TAM_KEY_CHAR, 'z', TAM_MOD_CTRL, "Ctrl-Z");
 
     /* Arrows may arrive split across reads. */
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b", 1) == 0);
+    assert(tam_key_feed(&p, "\x1b", 1) == (int)(1));
     assert(tam_key_next(&p, &(tam_key_event_t){0}) == 0);
-    assert(tam_key_feed(&p, "[", 1) == 0);
+    assert(tam_key_feed(&p, "[", 1) == (int)(1));
     assert(tam_key_next(&p, &(tam_key_event_t){0}) == 0);
-    assert(tam_key_feed(&p, "A", 1) == 0);
+    assert(tam_key_feed(&p, "A", 1) == (int)(1));
     check_key(&p, TAM_KEY_UP, 0, 0, "up");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b[B\x1b[C\x1b[D", 9) == 0);
+    assert(tam_key_feed(&p, "\x1b[B\x1b[C\x1b[D", 9) == (int)(9));
     check_key(&p, TAM_KEY_DOWN, 0, 0, "down");
     check_key(&p, TAM_KEY_RIGHT, 0, 0, "right");
     check_key(&p, TAM_KEY_LEFT, 0, 0, "left");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b[H\x1b[F", 6) == 0);
+    assert(tam_key_feed(&p, "\x1b[H\x1b[F", 6) == (int)(6));
     check_key(&p, TAM_KEY_HOME, 0, 0, "home");
     check_key(&p, TAM_KEY_END, 0, 0, "end");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b[5~\x1b[6~\x1b[3~\x1b[2~", 16) == 0);
+    assert(tam_key_feed(&p, "\x1b[5~\x1b[6~\x1b[3~\x1b[2~", 16) == (int)(16));
     check_key(&p, TAM_KEY_PAGE_UP, 0, 0, "page up");
     check_key(&p, TAM_KEY_PAGE_DOWN, 0, 0, "page down");
     check_key(&p, TAM_KEY_DELETE, 0, 0, "delete");
     check_key(&p, TAM_KEY_INSERT, 0, 0, "insert");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b[1;5A", 6) == 0);
+    assert(tam_key_feed(&p, "\x1b[1;5A", 6) == (int)(6));
     check_key(&p, TAM_KEY_UP, 0, TAM_MOD_CTRL, "ctrl-up");
 
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b[Z", 3) == 0);
+    assert(tam_key_feed(&p, "\x1b[Z", 3) == (int)(3));
     check_key(&p, TAM_KEY_TAB, 0, TAM_MOD_SHIFT, "shift-tab");
 
     /* SS3 form, used by xterm in application cursor mode. */
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1bOA\x1bOP", 6) == 0);
+    assert(tam_key_feed(&p, "\x1bOA\x1bOP", 6) == (int)(6));
     check_key(&p, TAM_KEY_UP, 0, 0, "SS3 up");
     check_key(&p, TAM_KEY_F1, 0, 0, "SS3 F1");
 
     /* Alt-prefixed text. */
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b" "b", 2) == 0);
+    assert(tam_key_feed(&p, "\x1b" "b", 2) == (int)(2));
     check_key(&p, TAM_KEY_CHAR, 'b', TAM_MOD_ALT, "alt-b");
 
     /* UTF-8 text passes through as one character. */
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\xc3\xa9", 2) == 0);
+    assert(tam_key_feed(&p, "\xc3\xa9", 2) == (int)(2));
     check_key(&p, TAM_KEY_CHAR, 0x00E9, 0, "e acute");
 
     /* A lone ESC becomes ESC only after the timeout. */
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b", 1) == 0);
+    assert(tam_key_feed(&p, "\x1b", 1) == (int)(1));
     tam_key_event_t ev;
     assert(tam_key_next(&p, &ev) == 0);
     assert(tam_key_timeout(&p, &ev) == 1);
@@ -164,8 +164,44 @@ static void test_keys(void)
 
     /* Unknown sequences are consumed without wedging the stream. */
     tam_key_init(&p);
-    assert(tam_key_feed(&p, "\x1b[99~z", 6) == 0);
+    assert(tam_key_feed(&p, "\x1b[99~z", 6) == (int)(6));
     check_key(&p, TAM_KEY_CHAR, 'z', 0, "after unknown");
+
+    /* A large chunk is taken in part, and the rest after decoding. */
+    tam_key_init(&p);
+    char many[200];
+    memset(many, 'x', sizeof many);
+    const char *rest = many;
+    size_t left = sizeof many;
+    int seen = 0;
+    while (left > 0) {
+        int took = tam_key_feed(&p, rest, left);
+        assert(took >= 0 && (size_t)took <= left);
+        assert(took > 0 || tam_key_pending(&p) == TAM_KEY_BUF_SIZE);
+        rest += took;
+        left -= (size_t)took;
+        tam_key_event_t kev;
+        while (tam_key_next(&p, &kev) == 1) {
+            assert(kev.type == TAM_KEY_CHAR && kev.codepoint == 'x');
+            seen++;
+        }
+    }
+    assert(seen == (int)sizeof many);
+    assert(tam_key_feed(NULL, "x", 1) == -1);
+
+    /* An unfinished escape sequence that fills the buffer still yields an
+     * event, so a feed loop cannot wedge. */
+    tam_key_init(&p);
+    char csi[TAM_KEY_BUF_SIZE];
+    csi[0] = '\x1b';
+    csi[1] = '[';
+    memset(csi + 2, '1', sizeof csi - 2);
+    assert(tam_key_feed(&p, csi, sizeof csi) == (int)sizeof csi);
+    assert(tam_key_feed(&p, "q", 1) == 0);
+    tam_key_event_t first;
+    assert(tam_key_next(&p, &first) == 1 && first.type == TAM_KEY_ESC);
+    assert(tam_key_pending(&p) < TAM_KEY_BUF_SIZE);
+    assert(tam_key_feed(&p, "q", 1) == 1);
 
     printf("  [PASS] test_keys\n");
 }

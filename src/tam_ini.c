@@ -27,8 +27,10 @@ int tam_ini_parse_string(const char *string, tam_ini_handler_t handler, void *us
     if (!copy) return -1;
 
     char section[128] = "";
+    bool section_ok = true;
     char *line = copy;
     int line_num = 0;
+    int first_error = 0;
 
     while (*line) {
         line_num++;
@@ -39,24 +41,32 @@ int tam_ini_parse_string(const char *string, tam_ini_handler_t handler, void *us
         }
 
         char *start = lskip(line);
+        rskip(start);
         if (*start && *start != ';' && *start != '#') {
             if (*start == '[') {
                 char *end = strchr(start + 1, ']');
-                if (end) {
-                    *end = '\0';
-                    strncpy(section, start + 1, sizeof(section) - 1);
-                    section[sizeof(section) - 1] = '\0';
+                size_t len = end ? (size_t)(end - start - 1) : 0;
+                if (!end || len >= sizeof(section)) {
+                    /* A broken or overlong header: its keys are not
+                     * passed on under a wrong section name. */
+                    section_ok = false;
+                    if (!first_error) first_error = line_num;
+                } else {
+                    memcpy(section, start + 1, len);
+                    section[len] = '\0';
+                    section_ok = true;
                 }
             } else {
                 char *eq = strchr(start, '=');
                 if (!eq) {
                     eq = strchr(start, ':');
                 }
-                if (eq) {
+                if (!eq) {
+                    if (!first_error) first_error = line_num;
+                } else if (section_ok) {
                     *eq = '\0';
                     char *name = rskip(start);
                     char *value = lskip(eq + 1);
-                    value = rskip(value);
                     if (handler(user, section, name, value) != 0) {
                         free(copy);
                         return line_num;
@@ -69,12 +79,12 @@ int tam_ini_parse_string(const char *string, tam_ini_handler_t handler, void *us
     }
 
     free(copy);
-    return 0;
+    return first_error;
 }
 
 int tam_ini_parse_file(const char *filename, tam_ini_handler_t handler, void *user) {
     size_t len = 0;
-    char *content = tam_fs_read_file(filename, &len);
+    char *content = tam_fs_read(filename, 0, &len);
     if (!content) return -1;
 
     int ret = tam_ini_parse_string(content, handler, user);

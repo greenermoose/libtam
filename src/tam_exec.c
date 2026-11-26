@@ -9,6 +9,7 @@
 #include <time.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include "tam_internal.h"
 
 #define TAM_EXEC_DEFAULT_TIMEOUT_MS 30000
 #define TAM_EXEC_DEFAULT_MAX_OUTPUT ((size_t)16 * 1024 * 1024)
@@ -21,12 +22,6 @@ void tam_exec_result_free(tam_exec_result_t *res) {
     res->stderr_buf = NULL;
     res->stdout_len = 0;
     res->stderr_len = 0;
-}
-
-static long long now_ms(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
 static void close_fd(int *fd) {
@@ -43,7 +38,8 @@ typedef struct {
 } capture_t;
 
 /* Read what is available from fd into c. Returns 0 at end of file, 1 when
- * more may follow, and -1 when the cap is reached (what fits is kept). */
+ * more may follow, -1 when the cap is reached (what fits is kept), and -2
+ * when memory runs out. */
 static int capture_read(int fd, capture_t *c, size_t max) {
     char chunk[16384];
     ssize_t n = read(fd, chunk, sizeof(chunk));
@@ -59,7 +55,7 @@ static int capture_read(int fd, capture_t *c, size_t max) {
         size_t cap = c->cap ? c->cap : 4096;
         while (c->len + take + 1 > cap) cap *= 2;
         char *next = realloc(c->buf, cap);
-        if (!next) return -1;
+        if (!next) return -2;
         c->buf = next;
         c->cap = cap;
     }
@@ -69,13 +65,35 @@ static int capture_read(int fd, capture_t *c, size_t max) {
     return capped ? -1 : 1;
 }
 
-static void child_exec(const char *const argv[], int in_fd, int out_fd, int err_fd) {
+/* In the forked child: give the program a clean signal state and its
+ * streams, then exec it. An exec failure is reported through `report`
+ * (close-on-exec, so a successful exec closes it). */
+static void child_exec(const char *const argv[], int in_fd, int out_fd, int err_fd,
+                       int report) {
+    static const int defaults[] = {SIGPIPE, SIGINT, SIGQUIT, SIGTERM, SIGHUP,
+                                   SIGCHLD, SIGTSTP, SIGTTIN, SIGTTOU, SIGALRM,
+                                   SIGUSR1, SIGUSR2, SIGWINCH};
+    struct sigaction dfl;
+    memset(&dfl, 0, sizeof(dfl));
+    dfl.sa_handler = SIG_DFL;
+    sigemptyset(&dfl.sa_mask);
+    for (size_t i = 0; i < sizeof(defaults) / sizeof(defaults[0]); i++)
+        (void)sigaction(defaults[i], &dfl, NULL);
+    sigset_t none;
+    sigemptyset(&none);
+    (void)sigprocmask(SIG_SETMASK, &none, NULL);
+
     setpgid(0, 0);
     if (in_fd < 0) in_fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
     if (in_fd >= 0) dup2(in_fd, STDIN_FILENO);
     dup2(out_fd, STDOUT_FILENO);
     dup2(err_fd, STDERR_FILENO);
     execvp(argv[0], (char *const *)argv);
+    int err = errno;
+    ssize_t w;
+    do {
+        w = write(report, &err, sizeof(err));
+    } while (w < 0 && errno == EINTR);
     _exit(127);
 }
 
@@ -104,10 +122,14 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
     size_t input_len = input ? opts->input_len : 0;
 
     int out_pipe[2] = {-1, -1}, err_pipe[2] = {-1, -1}, in_pipe[2] = {-1, -1};
+    int report[2] = {-1, -1};
     if (pipe2(out_pipe, O_CLOEXEC) < 0 || pipe2(err_pipe, O_CLOEXEC) < 0 ||
+        pipe2(report, O_CLOEXEC) < 0 ||
         (input && pipe2(in_pipe, O_CLOEXEC) < 0)) {
+        res.error = errno;
         close_fd(&out_pipe[0]); close_fd(&out_pipe[1]);
         close_fd(&err_pipe[0]); close_fd(&err_pipe[1]);
+        close_fd(&report[0]); close_fd(&report[1]);
         return res;
     }
 
@@ -120,20 +142,33 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
 
     pid_t pid = fork();
     if (pid == 0) {
-        sigprocmask(SIG_SETMASK, &old_mask, NULL);
-        child_exec(argv, in_pipe[0], out_pipe[1], err_pipe[1]);
+        child_exec(argv, in_pipe[0], out_pipe[1], err_pipe[1], report[1]);
     }
+    int fork_errno = errno;
     close_fd(&in_pipe[0]);
     close_fd(&out_pipe[1]);
     close_fd(&err_pipe[1]);
+    close_fd(&report[1]);
     if (pid < 0) {
+        res.error = fork_errno;
         close_fd(&in_pipe[1]);
         close_fd(&out_pipe[0]);
         close_fd(&err_pipe[0]);
+        close_fd(&report[0]);
         sigprocmask(SIG_SETMASK, &old_mask, NULL);
         return res;
     }
     setpgid(pid, pid);
+
+    /* The report pipe closes on a successful exec, or carries the errno of a
+     * failed one; either comes at once. */
+    int exec_errno = 0;
+    ssize_t got;
+    do {
+        got = read(report[0], &exec_errno, sizeof(exec_errno));
+    } while (got < 0 && errno == EINTR);
+    close_fd(&report[0]);
+    if (got == (ssize_t)sizeof(exec_errno)) res.error = exec_errno;
 
     fcntl(out_pipe[0], F_SETFL, O_NONBLOCK);
     fcntl(err_pipe[0], F_SETFL, O_NONBLOCK);
@@ -144,12 +179,13 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
 
     capture_t out = {0}, err = {0};
     size_t written = 0;
-    long long deadline = now_ms() + timeout;
+    long long deadline = tam__now_ms() + timeout;
     int status = 0;
     bool reaped = false;
+    bool oom = false;
 
     while (out_pipe[0] >= 0 || err_pipe[0] >= 0) {
-        long long remaining = deadline - now_ms();
+        long long remaining = deadline - tam__now_ms();
         if (remaining <= 0) {
             res.timed_out = true;
             break;
@@ -174,12 +210,17 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
         if (out_i >= 0 && fds[out_i].revents) {
             int r = capture_read(out_pipe[0], &out, max);
             if (r == 0) close_fd(&out_pipe[0]);
-            if (r < 0) capped = 1;
+            if (r < 0) capped = r;
         }
         if (err_i >= 0 && fds[err_i].revents) {
             int r = capture_read(err_pipe[0], &err, max);
             if (r == 0) close_fd(&err_pipe[0]);
-            if (r < 0) capped = 1;
+            if (r < 0 && capped != -2) capped = r;
+        }
+        if (capped == -2) {
+            res.error = ENOMEM;
+            oom = true;
+            break;
         }
         if (capped) {
             res.truncated = true;
@@ -191,14 +232,14 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
     close_fd(&err_pipe[0]);
 
     /* The output is closed; the child still has until the deadline to exit. */
-    while (!res.timed_out && !res.truncated) {
+    while (!res.timed_out && !res.truncated && !oom) {
         pid_t w = waitpid(pid, &status, WNOHANG);
         if (w == pid) {
             reaped = true;
             break;
         }
         if (w < 0 && errno != EINTR) break;
-        if (now_ms() >= deadline) {
+        if (tam__now_ms() >= deadline) {
             res.timed_out = true;
             break;
         }
@@ -218,7 +259,7 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
     res.stdout_len = out.len;
     res.stderr_buf = err.buf ? err.buf : calloc(1, 1);
     res.stderr_len = err.len;
-    if (res.timed_out || res.truncated) {
+    if (res.timed_out || res.truncated || oom) {
         res.exit_code = -1;
     } else if (WIFEXITED(status)) {
         res.exit_code = WEXITSTATUS(status);

@@ -51,6 +51,29 @@ int main(void) {
     assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == 0);
     assert(strcmp(ver, "0.6.37") == 0);
 
+    /* Surrounding blanks and a letter suffix are fine. */
+    write_text(file, "  0.4.2a \r\nnext line\n");
+    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == 0);
+    assert(strcmp(ver, "0.4.2a") == 0);
+
+    /* A value that does not fit fails instead of being cut short. */
+    write_text(file, "0.6.37-with-a-very-long-suffix-that-does-not-fit-in-sixty-four-bytes\n");
+    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == -1);
+    char longline[700];
+    memset(longline, '9', sizeof longline - 1);
+    longline[sizeof longline - 1] = '\0';
+    write_text(file, longline);
+    char big[1024];
+    assert(tam_cultivar_read_version(root, big, sizeof(big)) == -1);
+
+    /* Anything but a version token fails. */
+    write_text(file, "0.6.37 extra\n");
+    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == -1);
+    write_text(file, "\"0.6.37\"\n");
+    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == -1);
+    write_text(file, "\n");
+    assert(tam_cultivar_read_version(root, ver, sizeof(ver)) == -1);
+
     puts("test_cultivar: OK");
     return 0;
 }

@@ -19,6 +19,12 @@ static void test_portal(void) {
     free(p3);
 
     assert(tam_portal_uri_to_path(NULL) == NULL);
+    /* Another host and an encoded NUL are refused. */
+    assert(tam_portal_uri_to_path("file://example.com/etc/hosts") == NULL);
+    assert(tam_portal_uri_to_path("file:///tmp/a%00b") == NULL);
+    char *p4 = tam_portal_uri_to_path("file:///tmp/100%");
+    assert(p4 && strcmp(p4, "/tmp/100%") == 0);
+    free(p4);
 
     /* Test result freeing with NULL and allocated buffers */
     tam_portal_file_result_t dummy;

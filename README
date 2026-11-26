@@ -36,9 +36,12 @@ CAPABILITIES & MODULES
 
   Module: tam_fs
   Header / Symbol: tam_fs_*
-  Description: Safe filesystem primitives, whole-file reading, atomic writes
-  that sync the file and its directory (tam_fs_write_atomic), directory sync,
-  and mkdir -p (tam_fs_mkdir_p).
+  Description: Safe filesystem primitives: whole-file reading that refuses
+  FIFOs and devices, works on /proc and takes a size cap (tam_fs_read), reading
+  a pipe or stdin to its end (tam_fd_read_all), atomic writes that sync the
+  file and its directory and can keep an existing file's mode and write
+  through symbolic links (tam_fs_write_atomic), directory sync, and mkdir -p
+  (tam_fs_mkdir_p).
 
   Module: tam_fs_tree
   Header / Symbol: tam_fs_exchange, tam_fs_clone_or_copy, tam_fs_remove_tree,
@@ -168,6 +171,8 @@ Usage Example
     #include <tam.h>
     #include <stdio.h>
     #include <stdlib.h>
+    #include <string.h>
+    #include <errno.h>
 
     int main(void) {
         /* 1. Dynamic string formatting */
@@ -186,7 +191,8 @@ Usage Example
         /* 3. Atomic write to this command's state directory */
         char *path = tam_xdg_path(TAM_XDG_STATE, "example", "status", true);
         if (path != NULL) {
-            tam_fs_write_atomic(path, s, tam_str_len(s), 0644);
+            if (tam_fs_write_atomic(path, s, tam_str_len(s), 0, 0644) < 0)
+                tam_log_warn("status not saved: %s", strerror(errno));
             free(path);
         }
 

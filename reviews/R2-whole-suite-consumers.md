@@ -50,7 +50,9 @@ Consumer bugs found along the way are listed at the end.
 - **Fix:** Free the old block and return NULL, so the chained idiom is
   leak-free. Check `len + addlen` and the doubling for overflow. Test with
   an allocation-failure hook.
-- **Status:** open
+- **Status:** fixed in 0.10.0 by keeping the old string valid on failure
+  (overflow checks, `cat_json` grows once, `trim` of ""); see P1 for
+  why libtam does not free it
 
 ### 2. `tam_fs_read_file` is unsafe for anything but a small regular file (high)
 
@@ -72,7 +74,7 @@ Consumer bugs found along the way are listed at the end.
 - **Fix:** Use an fd-based read with `O_CLOEXEC|O_NONBLOCK`. It refuses
   anything but a regular file, reads until EOF, and takes a size cap. Add
   a separate `tam_fd_read_all` for pipes and stdin.
-- **Status:** open
+- **Status:** fixed in 0.10.0 (`tam_fs_read`, `tam_fd_read_all`)
 
 ### 3. `tam_fs_write_atomic` forces the mode and replaces symlinks (high)
 
@@ -96,7 +98,8 @@ Consumer bugs found along the way are listed at the end.
   - Write through a final symlink unless the caller asks to replace it.
   - Use `mkostemp(O_CLOEXEC)` and build the temporary path dynamically.
   - Report "replaced, not durable" separately from failure.
-- **Status:** open
+- **Status:** fixed in 0.10.0 (flags `TAM_FS_KEEP_MODE` and
+  `TAM_FS_REPLACE_LINK`); tam-edit and tam-data now keep modes
 
 ### 4. `tam_key_feed` drops a whole chunk over 64 bytes (high)
 
@@ -109,7 +112,7 @@ Consumer bugs found along the way are listed at the end.
 - **Evidence:** Source inspection of both sides.
 - **Fix:** Return the number of bytes accepted, and have callers feed the
   rest after draining `tam_key_next`.
-- **Status:** open
+- **Status:** fixed in 0.10.0; tam-knox 1.0.7 feeds in a loop
 
 ### 5. `tam_exec` children inherit blocked and ignored signals (medium)
 
@@ -127,7 +130,8 @@ Consumer bugs found along the way are listed at the end.
   - Reset the mask and dispositions in the child.
   - Report the exec errno through a close-on-exec pipe.
   - Report out-of-memory separately from truncation.
-- **Status:** open
+- **Status:** fixed in 0.10.0 (child signal state, `error` field); the 5 ms
+  wait poll remains
 
 ### 6. The error conventions disagree (low)
 
@@ -147,7 +151,8 @@ Consumer bugs found along the way are listed at the end.
   with errno set. A pointer result is NULL with errno set. Name the enums,
   add the format attributes, and move the feature macros into each
   consumer's CFLAGS.
-- **Status:** open
+- **Status:** partly fixed in 0.10.0 (format attributes, named enums, one
+  convention for changed functions); feature macros deferred
 
 ### 7. Other silent truncation and parsing gaps (low)
 
@@ -162,7 +167,7 @@ Consumer bugs found along the way are listed at the end.
     a NUL byte.
 - **Evidence:** Source inspection.
 - **Fix:** Fail on each of these with a line number or errno.
-- **Status:** open
+- **Status:** fixed in 0.10.0
 
 ### 8. Primitives every program writes again (medium)
 
@@ -243,8 +248,9 @@ Consumer bugs found along the way are listed at the end.
     `--atleast-version` for what it actually uses.
   - Make the archive a link prerequisite.
   - Reconcile tam's pin.
-- **Status:** 0.9.2 names the hardening; the rest open (P1 0.10.0 and
-  migrations)
+- **Status:** 0.9.2 names the hardening; tam-edit, tam-knox, tam-data,
+  tamlinux-tools require 0.10.0; tam, the tamlinux command floors and
+  tam's pin remain
 
 ## Consumer bugs found along the way
 

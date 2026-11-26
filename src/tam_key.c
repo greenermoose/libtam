@@ -26,11 +26,11 @@ size_t tam_key_pending(const tam_key_parser_t *p)
 int tam_key_feed(tam_key_parser_t *p, const void *data, size_t len)
 {
     if (p == NULL || (data == NULL && len > 0)) return -1;
-    if (len == 0) return 0;
-    if (len > sizeof(p->buf) - p->len) return -1;
-    memcpy(p->buf + p->len, data, len);
+    size_t room = sizeof(p->buf) - p->len;
+    if (len > room) len = room;
+    if (len > 0) memcpy(p->buf + p->len, data, len);
     p->len += len;
-    return 0;
+    return (int)len;
 }
 
 /* Map one control byte. Returns 0 when the byte is ordinary text. */

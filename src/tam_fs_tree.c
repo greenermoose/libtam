@@ -11,6 +11,7 @@
 #include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
+#include "tam_internal.h"
 
 #ifndef RENAME_EXCHANGE
 #define RENAME_EXCHANGE (1 << 1)
@@ -171,12 +172,6 @@ int tam_fs_remove_tree(int dirfd, const char *name) {
     return unlinkat(dirfd, name, AT_REMOVEDIR);
 }
 
-static long long now_ms(void) {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-}
-
 int tam_fs_lock(const char *path, int timeout_ms) {
     if (!path) {
         errno = EINVAL;
@@ -184,11 +179,11 @@ int tam_fs_lock(const char *path, int timeout_ms) {
     }
     int fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
-    long long deadline = now_ms() + (timeout_ms > 0 ? timeout_ms : 0);
+    long long deadline = tam__now_ms() + (timeout_ms > 0 ? timeout_ms : 0);
     for (;;) {
         if (flock(fd, LOCK_EX | LOCK_NB) == 0) return fd;
         if (errno == EINTR) continue;
-        if (errno != EWOULDBLOCK || now_ms() >= deadline) break;
+        if (errno != EWOULDBLOCK || tam__now_ms() >= deadline) break;
         struct timespec pause = {0, 50 * 1000000L};
         nanosleep(&pause, NULL);
     }

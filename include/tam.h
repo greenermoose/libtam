@@ -25,9 +25,9 @@ extern "C" {
 /* ========================================================================= */
 
 #define TAM_VERSION_MAJOR 0
-#define TAM_VERSION_MINOR 9
-#define TAM_VERSION_PATCH 2
-#define TAM_VERSION_STRING "0.9.2"
+#define TAM_VERSION_MINOR 10
+#define TAM_VERSION_PATCH 0
+#define TAM_VERSION_STRING "0.10.0"
 
 const char *tam_version(void);
 
@@ -36,8 +36,10 @@ const char *tam_version(void);
  * upgrade transaction is pending, -1 on unexpected error. */
 int tam_install_pending(const char *pending_path);
 
-/* Read the active cultivar version string (e.g. "0.6.35") under root (or "/"
- * when root is NULL). Returns 0 on success, -1 if unavailable. */
+/* Read the active cultivar version string (e.g. "0.6.35") from
+ * usr/lib/tamlinux/current/VERSION under root (or "/" when root is NULL).
+ * Returns 0 on success; -1 if it is unavailable, its first line does not fit
+ * in max_len, or it holds anything but letters, digits and . _ + -. */
 int tam_cultivar_read_version(const char *root, char *buf, size_t max_len);
 
 /* ========================================================================= */
@@ -51,23 +53,31 @@ typedef enum {
     TAM_LOG_ERROR = 3
 } tam_log_level_t;
 
+/* printf-style functions are checked by the compiler. */
+#if defined(__GNUC__) || defined(__clang__)
+#define TAM_PRINTF(fmt, args) __attribute__((format(printf, fmt, args)))
+#else
+#define TAM_PRINTF(fmt, args)
+#endif
+
 void tam_log_set_level(tam_log_level_t level);
-void tam_log_info(const char *fmt, ...);
-void tam_log_warn(const char *fmt, ...);
-void tam_log_error(const char *fmt, ...);
-void tam_log_debug(const char *fmt, ...);
+void tam_log_info(const char *fmt, ...) TAM_PRINTF(1, 2);
+void tam_log_warn(const char *fmt, ...) TAM_PRINTF(1, 2);
+void tam_log_error(const char *fmt, ...) TAM_PRINTF(1, 2);
+void tam_log_debug(const char *fmt, ...) TAM_PRINTF(1, 2);
 
 /* ========================================================================= */
 /* Dynamic Strings (tam_str)                                                 */
 /* ========================================================================= */
 
-/* An append returns the string, which may have moved. On allocation failure
- * it returns NULL and leaves the old string allocated, so keep the old
- * pointer until the result is checked (tam_str_cat_json differs; see below):
+/* An append returns the string, which may have moved. On failure (out of
+ * memory, a size overflow, or a printf format error) it returns NULL with
+ * errno set and leaves the old string as it was and still allocated, so keep
+ * the old pointer until the result is checked:
  *     tam_str_t t = tam_str_cat(s, "x");
  *     if (!t) { tam_str_free(s); return -1; }
  *     s = t;
- * libtam 0.10.0 plans to free the old string on failure instead. */
+ * A NULL string or text argument returns `s` unchanged. */
 typedef char *tam_str_t;
 
 tam_str_t tam_str_new(const char *init);
@@ -78,15 +88,13 @@ size_t    tam_str_avail(const tam_str_t s);
 void      tam_str_free(tam_str_t s);
 tam_str_t tam_str_cat(tam_str_t s, const char *t);
 tam_str_t tam_str_cat_len(tam_str_t s, const void *t, size_t len);
-tam_str_t tam_str_cat_printf(tam_str_t s, const char *fmt, ...);
+tam_str_t tam_str_cat_printf(tam_str_t s, const char *fmt, ...) TAM_PRINTF(2, 3);
 void      tam_str_clear(tam_str_t s);
 tam_str_t tam_str_trim(tam_str_t s, const char *cset);
 
 /* Append text as the body of a JSON string (no surrounding quotes): quotes,
  * backslashes and control characters are escaped; other bytes, including
- * UTF-8, pass through. On allocation failure it returns NULL and the string
- * is lost: it may already have moved, so the caller's old pointer must not be
- * freed or used. */
+ * UTF-8, pass through. Fails like any other append. */
 tam_str_t tam_str_cat_json(tam_str_t s, const char *text);
 
 /* ========================================================================= */
@@ -94,10 +102,13 @@ tam_str_t tam_str_cat_json(tam_str_t s, const char *text);
 /* ========================================================================= */
 
 /* argv runs directly (no shell) in its own process group, with standard
- * input from /dev/null unless `input` is given. The deadline is wall-clock
- * time on the monotonic clock. When it passes, or a stream reaches
- * `max_output`, the whole process group is killed, `timed_out` or
- * `truncated` is set, exit_code is -1 and the output so far is kept. */
+ * input from /dev/null unless `input` is given, no blocked signals, and the
+ * default action for the signals a caller commonly ignores or catches (so a
+ * caller's SIG_IGN for SIGPIPE or SIGINT does not reach the child). The
+ * deadline is wall-clock time on the monotonic clock. When it passes, or a
+ * stream reaches `max_output`, the whole process group is killed,
+ * `timed_out` or `truncated` is set, exit_code is -1 and the output so far
+ * is kept. */
 typedef struct {
     int         timeout_ms;  /* <= 0: 30,000 ms */
     const void *input;       /* bytes for standard input; NULL: /dev/null */
@@ -112,7 +123,10 @@ typedef struct {
     char *stderr_buf;
     size_t stderr_len;
     bool  timed_out;
-    bool  truncated;
+    bool  truncated;   /* a stream reached max_output */
+    int   error;       /* 0, or errno: the program could not be started (for
+                        * example ENOENT, with exit_code 127), a pipe or
+                        * fork failed (exit_code -1), or ENOMEM capturing */
 } tam_exec_result_t;
 
 tam_exec_result_t tam_exec(const char *const argv[], int timeout_ms);
@@ -123,13 +137,40 @@ void tam_exec_result_free(tam_exec_result_t *res);
 /* File System Primitives (tam_fs)                                           */
 /* ========================================================================= */
 
+/* The tam_fs functions that return bool leave errno set when they return
+ * false; the functions that return int give -1 with errno. */
 bool   tam_fs_file_exists(const char *path);
-char  *tam_fs_read_file(const char *path, size_t *out_len);
+
+/* Read a whole regular file into a NUL-terminated buffer the caller frees.
+ * The file is opened close-on-exec and without blocking, so a FIFO, device or
+ * directory is refused (EINVAL, EISDIR) instead of stalling. It reads until
+ * end of file, so /proc and sysfs files work. `max` caps the size in bytes
+ * (0: no cap; over it: EFBIG). NULL with errno on failure. */
+char  *tam_fs_read(const char *path, size_t max, size_t *out_len);
+
+/* Read an open descriptor (a pipe, stdin or a socket) until end of file, with
+ * the same buffer, cap and errors as tam_fs_read. The descriptor stays open. */
+char  *tam_fd_read_all(int fd, size_t max, size_t *out_len);
+
+/* Flags for tam_fs_write_atomic. */
+enum tam_fs_write_flags {
+    TAM_FS_KEEP_MODE    = 1, /* an existing file keeps its permission bits */
+    TAM_FS_REPLACE_LINK = 2  /* replace a symbolic link instead of its target */
+};
+
 /* Write to a temporary name in the same directory, sync it, rename it over
- * `path` and sync the directory, so after a crash `path` holds either the old
- * or the new contents. `mode` 0 keeps mkstemp's 0600. False on any failure,
- * with the temporary file removed. */
-bool   tam_fs_write_atomic(const char *path, const void *data, size_t len, mode_t mode);
+ * the destination and sync the directory, so after a crash the destination
+ * holds either the old or the new contents. The destination is `path`, or,
+ * when `path` is a symbolic link, the file it finally points to (unless
+ * TAM_FS_REPLACE_LINK). New contents get `mode` (0: 0600), or the existing
+ * file's mode with TAM_FS_KEEP_MODE.
+ * Returns 0 when written and synced; 1 when the file was replaced but the
+ * directory could not be synced (errno set; the new contents are in place but
+ * may not survive a crash); -1 with errno when nothing was replaced (the
+ * temporary file is removed). */
+int    tam_fs_write_atomic(const char *path, const void *data, size_t len,
+                           int flags, mode_t mode);
+
 /* Create a directory and any missing parents; new directories get `mode`.
  * True when the directory exists afterwards. */
 bool   tam_fs_mkdir_p(const char *path, mode_t mode);
@@ -179,8 +220,8 @@ void   tam_fs_unlock(int fd);
  * `dirfd`/`name` let the callback open it without resolving the path again.
  * The callback returns TAM_WALK_CONTINUE, TAM_WALK_SKIP (do not enter this
  * directory) or a negative value, which stops the walk and is returned. */
-enum { TAM_WALK_CONTINUE = 0, TAM_WALK_SKIP = 1 };
-enum { TAM_WALK_ONE_DEVICE = 1 }; /* flag: refuse (EXDEV) to enter another filesystem */
+enum tam_walk_result { TAM_WALK_CONTINUE = 0, TAM_WALK_SKIP = 1 };
+enum tam_walk_flags { TAM_WALK_ONE_DEVICE = 1 }; /* flag: refuse (EXDEV) to enter another filesystem */
 
 typedef struct {
     const char        *path;   /* relative to root, no leading "./" */
@@ -292,6 +333,14 @@ char *tam_xdg_path(tam_xdg_kind_t kind, const char *command, const char *leaf,
 /* Lightweight INI Parser (tam_ini)                                          */
 /* ========================================================================= */
 
+/* Lines are `name = value` (or `name: value`) under `[section]` headers;
+ * blank lines and lines starting with ; or # are skipped. The handler gets
+ * each pair in order; a non-zero return stops parsing and its line number is
+ * returned. A line that is not a header, pair or comment, an unclosed header
+ * and a section name over 127 bytes are errors: parsing continues (the keys
+ * of a bad section are not passed on) and the first error's line number is
+ * returned. 0 when every line parsed, -1 when the text or file could not be
+ * read. */
 typedef int (*tam_ini_handler_t)(void *user, const char *section, const char *name, const char *value);
 int tam_ini_parse_file(const char *filename, tam_ini_handler_t handler, void *user);
 int tam_ini_parse_string(const char *string, tam_ini_handler_t handler, void *user);

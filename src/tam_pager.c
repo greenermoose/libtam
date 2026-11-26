@@ -13,6 +13,8 @@
 #include <strings.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <sys/syscall.h>
+#include "tam_internal.h"
 
 const char *tam_pager_attention_sgr(bool linux_vt)
 {
@@ -244,17 +246,6 @@ tam_uri_kind_t tam_uri_classify(const char *url)
     return TAM_URI_LOCAL;
 }
 
-static int hex_val(char c)
-{
-    if (c >= '0' && c <= '9')
-        return c - '0';
-    if (c >= 'a' && c <= 'f')
-        return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F')
-        return c - 'A' + 10;
-    return -1;
-}
-
 static bool percent_decode_checked(const char *src, size_t len,
                                    char *out, size_t cap, size_t *out_len)
 {
@@ -269,8 +260,8 @@ static bool percent_decode_checked(const char *src, size_t len,
             return false;
         }
         if (src[i] == '%' && i + 2 < len) {
-            int hi = hex_val(src[i + 1]);
-            int lo = hex_val(src[i + 2]);
+            int hi = tam__hex_val(src[i + 1]);
+            int lo = tam__hex_val(src[i + 2]);
             if (hi >= 0 && lo >= 0) {
                 unsigned char b = (unsigned char)((hi << 4) | lo);
                 if (b != 0) {
@@ -399,6 +390,26 @@ size_t tam_uri_slugify(const char *text, size_t len, char *out, size_t cap)
     return used;
 }
 
+/* Close every descriptor above stderr except `keep`, so the opener does not
+ * hold the caller's files, sockets or terminal open. */
+static void close_inherited(int keep)
+{
+#ifdef SYS_close_range
+    if (keep > STDERR_FILENO + 1 &&
+        syscall(SYS_close_range, STDERR_FILENO + 1, keep - 1, 0) != 0)
+        goto fallback;
+    if (syscall(SYS_close_range, keep + 1, ~0U, 0) == 0)
+        return;
+fallback:
+#endif
+    {
+        long max = sysconf(_SC_OPEN_MAX);
+        if (max < 0 || max > 65536) max = 65536;
+        for (int fd = STDERR_FILENO + 1; fd < max; fd++)
+            if (fd != keep) (void)close(fd);
+    }
+}
+
 int tam_uri_open_external(const char *url)
 {
     if (tam_uri_classify(url) != TAM_URI_EXTERNAL) {
@@ -448,6 +459,7 @@ int tam_uri_open_external(const char *url)
             if (null_fd > STDERR_FILENO)
                 close(null_fd);
         }
+        close_inherited(report[1]);
         static const int sigs[] = {SIGINT, SIGQUIT, SIGTERM, SIGWINCH, SIGPIPE, SIGTSTP};
         for (size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++)
             (void)signal(sigs[i], SIG_DFL);

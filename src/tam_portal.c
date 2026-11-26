@@ -5,24 +5,18 @@
 #include <ctype.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #include <dbus/dbus.h>
-
-static int hex_val(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    return -1;
-}
+#include "tam_internal.h"
 
 char *tam_portal_uri_to_path(const char *uri) {
-    if (!uri) return NULL;
+    if (!uri) { errno = EINVAL; return NULL; }
     const char *p = uri;
-    if (strncmp(p, "file://localhost/", 17) == 0) {
-        p += 16; /* Keep leading '/' */
-    } else if (strncmp(p, "file:///", 8) == 0) {
-        p += 7; /* Keep leading '/' */
-    } else if (strncmp(p, "file://", 7) == 0) {
+    if (strncmp(p, "file://", 7) == 0) {
         p += 7;
+        /* Only a local host names a file on this machine. */
+        if (strncmp(p, "localhost/", 10) == 0) p += 9;
+        if (*p != '/') { errno = EINVAL; return NULL; }
     }
 
     size_t len = strlen(p);
@@ -32,10 +26,16 @@ char *tam_portal_uri_to_path(const char *uri) {
     size_t o = 0;
     for (size_t i = 0; i < len; i++) {
         if (p[i] == '%' && i + 2 < len) {
-            int h1 = hex_val(p[i + 1]);
-            int h2 = hex_val(p[i + 2]);
+            int h1 = tam__hex_val(p[i + 1]);
+            int h2 = h1 >= 0 ? tam__hex_val(p[i + 2]) : -1;
             if (h1 >= 0 && h2 >= 0) {
-                out[o++] = (char)((h1 << 4) | h2);
+                char c = (char)((h1 << 4) | h2);
+                if (c == '\0') {
+                    free(out);
+                    errno = EINVAL;
+                    return NULL;
+                }
+                out[o++] = c;
                 i += 2;
                 continue;
             }

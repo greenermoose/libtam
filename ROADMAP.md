@@ -34,7 +34,7 @@ Each version lands on his acceptance.
 
 - **0.9.2 (done 2026-11-26):** version bump for the `tam_pager`
   hardening, and stale comments corrected.
-- **0.10.0:** core semantics fixed in place, with every caller migrated
+- **0.10.0 (done 2026-11-26):** core semantics fixed in place, with every caller migrated
   (`tam_str`, `tam_fs`, `tam_key_feed`, `tam_exec`, one error
   convention).
 - **0.11.0:** process, I/O, socket, time, base64 and locale primitives.

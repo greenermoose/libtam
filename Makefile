@@ -118,7 +118,7 @@ test-display: build/test_display build/test_display_owned build/test_vt
 build:
 	mkdir -p build
 
-build/%.o: src/%.c include/tam.h build/.flags | build
+build/%.o: src/%.c include/tam.h src/tam_internal.h build/.flags | build
 	$(CC) $(CFLAGS) -c $< -o $@
 
 build/tam_portal.o: src/tam_portal.c include/tam.h include/tam_portal.h build/.flags | build

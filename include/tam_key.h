@@ -41,7 +41,7 @@ typedef enum {
     TAM_KEY_F12
 } tam_key_type_t;
 
-enum {
+enum tam_key_mod {
     TAM_MOD_SHIFT = 1u << 0,
     TAM_MOD_ALT   = 1u << 1,
     TAM_MOD_CTRL  = 1u << 2
@@ -62,8 +62,16 @@ typedef struct {
 
 void tam_key_init(tam_key_parser_t *p);
 
-/* Append bytes read from the terminal. Returns 0, or -1 if the pending input
- * would exceed the internal buffer (the caller should decode first). */
+/* Append bytes read from the terminal. The parser holds TAM_KEY_BUF_SIZE
+ * bytes, so it may take only part of `len`: it returns how many bytes it
+ * took (0 when full), or -1 for a NULL parser or data. Take events with
+ * tam_key_next, then feed the rest:
+ *     while (len > 0) {
+ *         int n = tam_key_feed(&p, data, len);
+ *         if (n < 0) break;
+ *         data += n; len -= (size_t)n;
+ *         while (tam_key_next(&p, &ev) == 1) handle(&ev);
+ *     } */
 int tam_key_feed(tam_key_parser_t *p, const void *data, size_t len);
 
 /* Decode the next event. Returns 1 when an event is available, 0 when more

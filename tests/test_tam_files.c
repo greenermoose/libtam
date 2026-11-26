@@ -339,14 +339,15 @@ static void test_lock(void) {
 static void test_write_atomic(void) {
     char path[4200];
     snprintf(path, sizeof path, "%s/atomic", base);
-    assert(tam_fs_write_atomic(path, "one", 3, 0640));
-    assert(tam_fs_write_atomic(path, "two", 3, 0640));
+    assert(tam_fs_write_atomic(path, "one", 3, 0, 0640) == 0);
+    assert(tam_fs_write_atomic(path, "two", 3, 0, 0640) == 0);
     assert(strcmp(get("atomic"), "two") == 0);
     struct stat st;
     assert(stat(path, &st) == 0 && (st.st_mode & 0777) == 0640);
-    assert(tam_fs_write_atomic(path, NULL, 0, 0644) && strcmp(get("atomic"), "") == 0);
+    assert(tam_fs_write_atomic(path, NULL, 0, 0, 0644) == 0 && strcmp(get("atomic"), "") == 0);
     snprintf(path, sizeof path, "%s/no-such-dir/atomic", base);
-    assert(!tam_fs_write_atomic(path, "x", 1, 0644));
+    errno = 0;
+    assert(tam_fs_write_atomic(path, "x", 1, 0, 0644) == -1 && errno == ENOENT);
     assert(tam_fs_sync_dir(base));
     printf("  [PASS] test_write_atomic\n");
 }

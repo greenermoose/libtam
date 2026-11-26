@@ -27,6 +27,9 @@ typedef struct {
 
 tam_portal_file_result_t tam_portal_file_choose(const tam_portal_file_options_t *options);
 void tam_portal_file_result_free(tam_portal_file_result_t *res);
+/* Turn a file:// URI (empty host or localhost) or a plain path into a
+ * percent-decoded path the caller frees. NULL with errno EINVAL for another
+ * host or an encoded NUL byte. */
 char *tam_portal_uri_to_path(const char *uri);
 
 #ifdef __cplusplus

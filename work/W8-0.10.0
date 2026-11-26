@@ -1,0 +1,51 @@
+W8 0.10.0: CORE SEMANTICS
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W7
+
+
+GUIDANCE
+
+  Fred: "do 0.10.0"
+
+
+DONE
+
+  - tam_str: overflow checks, trim of "", a format error fails,
+    cat_json sizes its output and grows once, printf attributes.
+  - tam_fs_read (replaces tam_fs_read_file) and tam_fd_read_all:
+    capped, close-on-exec, refuse FIFOs, devices and directories, read
+    /proc to EOF. Tested on a FIFO, /proc/self/status, a pipe, a
+    directory and over the cap.
+  - tam_fs_write_atomic(path, data, len, flags, mode): KEEP_MODE,
+    writes through links unless REPLACE_LINK, dangling links create
+    their target, ELOOP on a loop, returns 0, 1 or -1.
+  - tam_key_feed returns the bytes taken; tam_exec resets the child's
+    signal state and reports exec, pipe, fork and memory errno in
+    `error`; tam_ini reports bad lines inih-style; the cultivar reader
+    refuses long or invalid lines; tam_portal_uri_to_path refuses
+    another host and %00; the opener closes inherited descriptors.
+  - src/tam_internal.h: one monotonic clock and hex helper.
+  - make test, test-display and test-session pass. Installed to
+    ~/.local.
+  - Migrated tam-edit, tam-knox, tam-data, tamlinux-tools, start and
+    tam-boot; each builds and passes its tests against 0.10.0. tam is
+    migrated and tested in its working tree; its commit waits for the
+    ROADMAP.md and development.md handoff from another session.
+
+
+FAILED
+
+  - Freeing the old string on a failed tam_str append was planned and
+    dropped: about 40 callers already free it themselves. P1 records why.
+
+
+HANDOFF
+
+  - P1 0.11.0 is next. tamlinux/components.lock still pins libtam
+    a3e0901; pinning 0.10.0 must move with the consumer pins, on Fred's
+    word.
+  - tam-monitor needs the display archives, which ~/.local lacks; build
+    it with LIBTAM_PREFIX pointing at a prefix that has them.

@@ -1,0 +1,40 @@
+W15 0.14.2: TAM_EXEC WAITS ON A PIDFD
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W14
+
+
+GUIDANCE
+
+  Fred: "all four" (the P1 follow-ups: tam_exec polling, the feature
+  macros in tam.h, tam-open, and this record's stale queue).
+
+
+DONE
+
+  - After a program closed its output, tam_exec checked every 5 ms
+    whether it had exited, for as long as it kept running. It now opens
+    a pidfd and sleeps in poll until the program exits or the deadline
+    passes. A kernel without pidfds (before Linux 5.3) keeps the 5 ms
+    check.
+  - test_tam: a program that closes its output and runs 0.3 s is waited
+    for with fewer than 20 voluntary context switches (the old code
+    took about 60, and the test fails on it); one that lingers past its
+    deadline is still ended.
+  - tam_fs_lock's 50 ms retry stays: flock has no timed wait, and it
+    retries only while another process holds the lock.
+  - WHATNOW: replaced the finished P1 queue and the stale "waiting for
+    Fred" entry; three default archives.
+  - make test passes (ASan and UBSan). Installed to ~/.local.
+
+
+FAILED
+
+  - Nothing.
+
+
+HANDOFF
+
+  - Next: 0.15.0, the feature macros out of tam.h, then tam-open.

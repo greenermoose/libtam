@@ -3,14 +3,15 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W14
+Updated: 2026-11-26, with W15
 
 
 STATE
 
-  Version 0.14.1 on branch dev (the VERSION file is the version's source
-  of truth). Follows the tam-idol 0.2.0 standard (W3). Two static
-  archives by default: libtam.a, the core, which needs only libc, and
+  Version 0.14.2 on branch dev (the VERSION file is the version's source
+  of truth). Follows the tam-idol 0.2.0 standard (W3). Three static
+  archives by default: libtam.a, the core, which needs only libc;
+  libtam-render.a, the document renderers, which needs libtam.a; and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and
   libtam-display-session.a are experimental.
 
@@ -25,7 +26,9 @@ STATE
   holding tam-view's renderer, now shared by tam-view and tam-knox. W12
   released 0.14.0: process options and a secret-safe socket line reader,
   which the migrations need. W13 records the consumer migrations: every
-  program that links libtam now uses it (P1 done).
+  program that links libtam now uses it (P1 done). W14 released 0.14.1:
+  tam_tty_job_stop pauses a session leader. W15 released 0.14.2:
+  tam_exec sleeps on a pidfd instead of checking every 5 ms.
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
@@ -41,11 +44,13 @@ STATE
 
 NEXT
 
-  P1 (plans/P1-0.7-refactor.md) is queued, one version per slice, each
-  landing on Fred's acceptance:
+  Fred, 2026-11-26: "all four" of the P1 follow-ups:
 
-  0. P1 is done; 0.14.1 fixed tam_tty_job_stop for orphaned process
-     groups (W14). Open: tam-open does not link libtam yet.
+  1. tam_exec waits on a pidfd (0.14.2, done, W15).
+  2. tam.h stops setting _GNU_SOURCE and _POSIX_C_SOURCE for its
+     consumers; each program declares its own (0.15.0).
+  3. tam-open moves onto libtam.
+  4. This file's stale P1 queue (done, W15).
 
   These requests stay queued, each to start only when Fred asks:
 
@@ -67,7 +72,7 @@ NEXT
 
 WAITING FOR FRED
 
-  - Acceptance of each P1 version before the next one starts.
+  - Which queued request comes next, if any.
 
 
 WATCH OUT

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -291,6 +292,23 @@ static void test_exec(void) {
     tam_exec_result_t r2 = tam_exec(argv_sleep, 100);
     assert(r2.timed_out);
     tam_exec_result_free(&r2);
+
+    /* A program that closes its output and keeps running is waited for
+     * without waking every few milliseconds (a pidfd, not polling): the
+     * caller sleeps until it exits, and a deadline still ends it. */
+    const char *const argv_quiet[] = {"sh", "-c", "exec >&- 2>&-; sleep 0.3; exit 3", NULL};
+    struct rusage before, after;
+    getrusage(RUSAGE_SELF, &before);
+    tam_exec_result_t rq = tam_exec(argv_quiet, 5000);
+    getrusage(RUSAGE_SELF, &after);
+    assert(rq.exit_code == 3 && !rq.timed_out);
+    assert(after.ru_nvcsw - before.ru_nvcsw < 20);
+    tam_exec_result_free(&rq);
+    const char *const argv_linger[] = {"sh", "-c", "exec >&- 2>&-; sleep 5", NULL};
+    long long t0 = tam_monotonic_ms();
+    tam_exec_result_t rl = tam_exec(argv_linger, 200);
+    assert(rl.timed_out && tam_monotonic_ms() - t0 < 2000);
+    tam_exec_result_free(&rl);
 
     /* A missing program reports ENOENT, apart from a real exit 127. */
     const char *const argv_missing[] = {"/nonexistent/tam-no-such-program", NULL};

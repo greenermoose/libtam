@@ -47,6 +47,8 @@ Each version lands on his acceptance.
   kept descriptor, environment) and a socket reader safe for secrets.
 - **0.14.1 (done 2026-11-26):** `tam_tty_job_stop` pauses a session
   leader too (SIGSTOP when the process group is orphaned).
+- **0.14.2 (done 2026-11-26):** `tam_exec` sleeps on a pidfd until the
+  program exits, instead of checking every 5 ms.
 - **Consumer migrations (done 2026-11-26):** every program that links
   libtam moved onto it, one commit each.
 

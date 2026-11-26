@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 #include <errno.h>
 #include "tam_internal.h"
 
@@ -79,6 +80,18 @@ static void child_exec(const char *const argv[], int in_fd, int out_fd, int err_
     dup2(err_fd, STDERR_FILENO);
     execvp(argv[0], (char *const *)argv);
     tam__child_fail(report, errno);
+}
+
+/* A descriptor that becomes readable when `pid` exits (Linux 5.3), or -1
+ * where the kernel has none. */
+static int open_pidfd(pid_t pid) {
+#ifdef SYS_pidfd_open
+    return (int)syscall(SYS_pidfd_open, pid, 0);
+#else
+    (void)pid;
+    errno = ENOSYS;
+    return -1;
+#endif
 }
 
 /* Kill the child's process group, so helpers it started go too, and reap it. */
@@ -215,7 +228,10 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
     close_fd(&out_pipe[0]);
     close_fd(&err_pipe[0]);
 
-    /* The output is closed; the child still has until the deadline to exit. */
+    /* The output is closed; the child still has until the deadline to exit.
+     * Sleep on its pidfd until it exits or the deadline passes; only a
+     * kernel without pidfds falls back to checking every 5 ms. */
+    int pidfd = (res.timed_out || res.truncated || oom) ? -1 : open_pidfd(pid);
     while (!res.timed_out && !res.truncated && !oom) {
         pid_t w = waitpid(pid, &status, WNOHANG);
         if (w == pid) {
@@ -223,13 +239,21 @@ tam_exec_result_t tam_exec_opts(const char *const argv[], const tam_exec_opts_t 
             break;
         }
         if (w < 0 && errno != EINTR) break;
-        if (tam__now_ms() >= deadline) {
+        long long remaining = deadline - tam__now_ms();
+        if (remaining <= 0) {
             res.timed_out = true;
             break;
         }
-        struct timespec pause = { 0, 5 * 1000000L };
-        nanosleep(&pause, NULL);
+        if (pidfd >= 0) {
+            struct pollfd pf = { pidfd, POLLIN, 0 };
+            if (poll(&pf, 1, (int)remaining) < 0 && errno != EINTR)
+                close_fd(&pidfd);
+        } else {
+            struct timespec pause = { 0, 5 * 1000000L };
+            nanosleep(&pause, NULL);
+        }
     }
+    close_fd(&pidfd);
     if (!reaped) kill_and_reap(pid, &status);
 
     if (!sigismember(&old_mask, SIGPIPE)) {

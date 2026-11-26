@@ -26,8 +26,8 @@ extern "C" {
 
 #define TAM_VERSION_MAJOR 0
 #define TAM_VERSION_MINOR 14
-#define TAM_VERSION_PATCH 1
-#define TAM_VERSION_STRING "0.14.1"
+#define TAM_VERSION_PATCH 2
+#define TAM_VERSION_STRING "0.14.2"
 
 const char *tam_version(void);
 

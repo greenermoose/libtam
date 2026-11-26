@@ -196,8 +196,8 @@ Consumer bugs found along the way are listed at the end.
 - **Fix:** Add the `tam_proc`, `tam_io`, `tam_time`, `tam_sock` and
   `tam_b64` modules, and extend `tam_path`, `tam_uni`, `tam_tty`,
   `tam_key` and `tam_cultivar` (P1 Phases 2 and 3).
-- **Status:** primitives added in 0.11.0 and 0.12.0; the consumers' own copies go in
-  the P1 migrations
+- **Status:** fixed: primitives in 0.11.0 to 0.14.0, consumers migrated
+  2026-11-26 (P1)
 
 ### 9. tam-view's renderer is copied verbatim into tam-knox (medium)
 
@@ -250,11 +250,16 @@ Consumer bugs found along the way are listed at the end.
     `--atleast-version` for what it actually uses.
   - Make the archive a link prerequisite.
   - Reconcile tam's pin.
-- **Status:** 0.9.2 names the hardening; tam-edit, tam-knox, tam-data,
-  tamlinux-tools and tam require 0.10.0, and tam's source-build pin
-  is 0.10.0; the tamlinux command floors remain
+- **Status:** fixed for every migrated program (floors, relink where the
+  build allows, tam's source-build pin); components.lock moved with the
+  migrations
 
 ## Consumer bugs found along the way
+
+All fixed in the 2026-11-26 migrations (P1), except tam-hide's
+0666 auth-socket default (kept: every user's lock screen must reach it and
+handlers check the peer uid), VT_WAITACTIVE without a timeout, and
+tam-meter's version fallbacks (Fred's call). See each program's work record.
 
 These belong to each program's own bug records. They are listed here so
 the migration slices in P1 fix them while replacing the local code.

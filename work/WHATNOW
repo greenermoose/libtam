@@ -3,7 +3,7 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W12
+Updated: 2026-11-26, with W13
 
 
 STATE
@@ -24,7 +24,8 @@ STATE
   0.12.0, the terminal stack. W11 released 0.13.0: libtam-render.a,
   holding tam-view's renderer, now shared by tam-view and tam-knox. W12
   released 0.14.0: process options and a secret-safe socket line reader,
-  which the migrations need.
+  which the migrations need. W13 records the consumer migrations: every
+  program that links libtam now uses it (P1 done).
 
   Recent work: 0.7.0 added the terminal foundation (tam_uni, tam_key,
   tam_tty), used by tam-edit, tam-clam and tam-last; 0.7.1 moved the
@@ -43,10 +44,8 @@ NEXT
   P1 (plans/P1-0.7-refactor.md) is queued, one version per slice, each
   landing on Fred's acceptance:
 
-  0. P1 consumer migrations, one program per slice: tam-edit, tam-clam,
-     tam-last and tam-pane first. Renderer bugs and tam-view R1's open
-     findings on render.c, render_html.c and source.c now belong here
-     (src/render).
+  0. P1 is done. Open: tam_tty_job_stop does nothing for an orphaned
+     process group (see P1); tam-open does not link libtam yet.
 
   These requests stay queued, each to start only when Fred asks:
 

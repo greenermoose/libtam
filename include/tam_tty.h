@@ -89,7 +89,10 @@ int tam_tty_suspend(tam_tty_t *t);
 int tam_tty_resume(tam_tty_t *t);
 
 /* Stop the program as Ctrl+Z would in a shell (raw input turns Ctrl+Z into
- * a key): suspend, stop with SIGTSTP, and resume when continued. */
+ * a key): suspend, stop with SIGTSTP, and resume when continued. The kernel
+ * discards SIGTSTP for an orphaned process group (a program that is its
+ * session's leader): there this returns at once without stopping, so such
+ * programs use tam_tty_suspend, raise(SIGSTOP) and tam_tty_resume. */
 int tam_tty_job_stop(tam_tty_t *t);
 
 /* Put the terminal back if the program dies or exits without

@@ -1,0 +1,34 @@
+W13 CONSUMER MIGRATIONS
+
+Date: 2026-11-26
+AI harness: Claude Code 2.1.332
+AI model: claude-opus-5-5
+Continues: W12
+
+
+GUIDANCE
+
+  Fred: "Move each program onto the shared code." All in a row, tam-hide
+  included and last, pins moved at the end.
+
+
+DONE
+
+  - tam-edit 1.2.0, tam-clam 0.3.10, tam-last 0.2.5, tam-pane 0.2.9,
+    tam-view 0.4.4, tam-knox 1.1.0, tam-data 1.0.3, the tamlinux commands,
+    tam 0.71.1, tam-journal 0.1.2 and tam-hide 0.2.1 moved onto libtam,
+    each with its tests passing; see each repo's work record.
+  - Updated P1 (done), R2 statuses, tam_tty.h (job_stop and orphaned
+    process groups).
+
+
+FAILED
+
+  - tam_tty_job_stop for programs that are session leaders: SIGTSTP is
+    discarded there; tam-view and tam-knox use SIGSTOP instead.
+
+
+HANDOFF
+
+  - A fix for job_stop (detect an orphaned group and use SIGSTOP, or
+    document SIGSTOP as the caller's choice) is the next libtam patch.

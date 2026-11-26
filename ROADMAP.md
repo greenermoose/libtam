@@ -44,8 +44,9 @@ Each version lands on his acceptance.
 - **0.13.0 (done 2026-11-26):** `libtam-render.a`, holding tam-view's
   renderer.
 - **0.14.0 (done 2026-11-26):** process options (stdin, kept output, a
-  kept descriptor, environment) and a socket reader safe for secrets, for
-  the consumer migrations, which follow.
+  kept descriptor, environment) and a socket reader safe for secrets.
+- **Consumer migrations (done 2026-11-26):** every program that links
+  libtam moved onto it, one commit each.
 
 ## Queued requests (on Fred's word)
 

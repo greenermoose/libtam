@@ -3,13 +3,13 @@ WHATNOW
 What libtam is doing now and what comes next. Read this first; revise it
 at the end of every session (work/README-work).
 
-Updated: 2026-11-26, with W17
+Updated: 2026-11-26, with W18
 
 
 STATE
 
   Version 0.15.1 on branch dev (the VERSION file is the version's source
-  of truth). Follows the tam-idol 0.2.0 standard (W3). Three static
+  of truth). Follows the tam-idol 1.3.0 standard (W18). Three static
   archives by default: libtam.a, the core, which needs only libc;
   libtam-render.a, the document renderers, which needs libtam.a; and
   libtam-portal.a, which needs D-Bus. The optional libtam-display.a and

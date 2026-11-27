@@ -3,7 +3,7 @@ LIBTAM — THE TAMLINUX C FOUNDATION LIBRARY
 libtam is the official C foundation library for Tamlinux packages, core system
 daemons, hardware telemetry probes, and command-line utilities.
 
-Follows the tam-idol 0.2.0 standard.
+Follows the tam-idol 1.3.0 standard.
 
 
 VISION & ANTI-BLOAT PHILOSOPHY
